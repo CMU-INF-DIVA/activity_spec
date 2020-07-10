@@ -1,65 +1,39 @@
-from typing import List, Union
+import os.path as osp
 
+import pandas as pd
 import torch
 
-from .base import Proposal, ProposalRegistry
 
-
-class CubeProposal(Proposal):
+class CubeProposals(object):
 
     '''
-    A proposal as a spatial-temporal cube.
-    spatial_box: (x0, y0, x1, y1).
-    temporal_slice: (t0, t1) in frame id.
+    Proposals each as a spatial-temporal cube.
+    cubes: [(x0, y0, x1, y1, t0, t1)] as torch.int.
     '''
 
-    RECORD = ['type', 'x0', 'y0', 'x1', 'y1', 't0', 't1']
+    COLUMNS = ['x0', 'y0', 'x1', 'y1', 't0', 't1']
 
-    def __init__(self, spatial_box: torch.Tensor, temporal_slice: torch.Tensor):
-        self.spatial_box = spatial_box
-        self.temporal_slice = temporal_slice
+    def __init__(self, cubes: torch.Tensor, video_name: str):
+        assert cubes.dim() == 2 and cubes.shape[1] == 6 and \
+            cubes.dtype == torch.int, 'Proposal format invalid'
+        self.cubes = cubes
+        self.video_name = video_name
 
-    def spatial_enlarge(self, enlarge_rate: float, spatial_limit: torch.Tensor):
-        '''
-        Enlarge spatial box.
-        enlarge_rate: enlarge rate in each axis.
-        spatial_limit: (x, y), frame size.
-        '''
-        spatial_size = self.spatial_box[2:] - self.spatial_box[:2]
-        enlarge_size = spatial_size * enlarge_rate
-        new_spatial_box = torch.empty_like(self.spatial_box)
-        new_spatial_box[:2] = torch.clamp(
-            self.spatial_box[:2] - enlarge_size, min=0)
-        new_spatial_box[2:] = torch.min(
-            self.spatial_box[2:] + enlarge_size, spatial_limit)
-        return CubeProposal(new_spatial_box, self.temporal_slice)
+    def to_pandas(self):
+        return pd.DataFrame(self.cubes.cpu().numpy(), columns=self.COLUMNS)
 
-    def spatial_merge(self, another_proposal):
-        new_spatial_box = torch.empty_like(self.spatial_box)
-        new_spatial_box[:2] = torch.min(
-            self.spatial_box[:2], another_proposal.spatial_box[:2])
-        new_spatial_box[2:] = torch.max(
-            self.spatial_box[2:], another_proposal.spatial_box[2:])
-        return CubeProposal(new_spatial_box, self.temporal_slice)
-
-    def get_cropped_frames(self, clip_frames) -> torch.Tensor:
-        x0, x1, y0, y1 = self.spatial_box.round().astype(int)
-        cropped_frames = clip_frames[:, y0:y1, x0:x1]
-        return cropped_frames
-
-    def to_record(self):
-        record = [self.__class__.__name__, *self.spatial_box.tolist(),
-                  *self.temporal_slice.tolist()]
-        record = dict(zip(self.RECORD, record))
-        return record
+    def save(self, save_dir):
+        df = self.to_pandas()
+        filename = self._get_filename(self.video_name, save_dir)
+        df.to_csv(filename)
 
     @classmethod
-    def from_record(cls, record):
-        values = super(CubeProposal, cls).parse_record(record)
-        tensor = torch.as_tensor(values)
-        spatial_box = tensor[:4]
-        temporal_slice = tensor[4:6]
-        return cls(spatial_box, temporal_slice)
+    def load(cls, video_name, load_dir):
+        filename = cls._get_filename(video_name, load_dir)
+        df = pd.read_csv(filename, index_col=0)
+        cubes = torch.as_tensor(df.values, dtype=torch.int)
+        return cls(cubes, video_name)
 
-
-ProposalRegistry[CubeProposal.__name__] = CubeProposal
+    @staticmethod
+    def _get_filename(video_name, data_dir):
+        return osp.join(data_dir, osp.splitext(video_name)[0] + '.csv')
