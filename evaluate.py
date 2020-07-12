@@ -59,6 +59,8 @@ def activity_worker(job):
         osp.join(evaluation_dir, 'scores_by_activity.csv'), '|')
     metrics = metrics[['metric_name', 'metric_value']]
     metrics = metrics.set_index('metric_name')
+    metrics['metric_value'] = metrics['metric_value'].apply(
+        lambda x: x if x != 'None' else 0).astype(float)
     metrics.columns = [job.activity_type]
     return metrics
 
@@ -98,13 +100,13 @@ def main(args):
     with Pool() as pool:
         metrics = [*progressbar(pool.imap_unordered(activity_worker, jobs),
                                 'Evaluation by type', total=len(jobs))]
+    metrics = sorted(metrics, key=lambda x: x.columns[0])
     metrics = pd.concat(metrics, axis=1)
-    metrics.to_csv(osp.join(args.evaluation_dir,
-                            'metrics_by_activity.csv'))
+    metrics.to_csv(osp.join(args.evaluation_dir, 'metrics_by_activity.csv'))
     metrics_mean = metrics.mean(axis=1).to_frame()
     metrics_mean.columns = ['mean']
     metrics_mean.to_csv(osp.join(args.evaluation_dir, 'metrics.csv'))
-    keys = ['w_p_miss@0.04tfa', 'nAUDC@0.2tfa']
+    keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa']
     logger.info('Metrics: \n\t%s', '\n\t'.join(['%s = %.4f' % (
         key, metrics_mean.loc[key, 'mean']) for key in keys]))
 
