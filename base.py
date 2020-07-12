@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-# Beginning part aligned with detectors.base.ObjectType
+# Beginning part aligned with detectors.ObjectType
 ProposalType = IntEnum('ProposalType', [
     'Vehicle', 'Person', 'Bike', 'PersonVehicle'], module=__name__)
 
