@@ -54,9 +54,12 @@ class Reference(object):
                 if valid[cube_i]:
                     quantized_activity = np.empty(7, dtype=np.int)
                     quantized_activity[0] = activity_type
-                    quantized_activity[1:5] = self._get_box(
+                    box = self._get_box(
                         activity, video_name, activity_starts[cube_i],
                         activity_ends[cube_i], box_mode)
+                    if box is None:
+                        continue
+                    quantized_activity[1:5] = box
                     quantized_activity[5] = cube_starts[cube_i]
                     quantized_activity[6] = cube_ends[cube_i]
                     quantized_activities.append(quantized_activity)
@@ -84,6 +87,8 @@ class Reference(object):
                            dtype=np.int)
             box[2:] += box[:2]
             boxes.append(box)
+        if len(boxes) == 0:
+            return None
         if len(boxes) == 1:
             return boxes[0]
         boxes = np.stack(boxes)
