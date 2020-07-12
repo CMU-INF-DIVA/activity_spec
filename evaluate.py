@@ -106,7 +106,7 @@ def main(args):
     metrics_mean = metrics.mean(axis=1).to_frame()
     metrics_mean.columns = ['mean']
     metrics_mean.to_csv(osp.join(args.evaluation_dir, 'metrics.csv'))
-    keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa']
+    keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'w_p_miss@0.04tfa']
     logger.info('Metrics: \n\t%s', '\n\t'.join(['%s = %.4f' % (
         key, metrics_mean.loc[key, 'mean']) for key in keys]))
 
