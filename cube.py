@@ -42,7 +42,7 @@ class CubeActivities(object):
 
     def to_official(self):
         '''
-        Official format in Json-like structure, 
+        Official format in Json structure, 
         only contains temporal and type information.
         '''
         activities = []

@@ -4,4 +4,63 @@ Author: Lijun Yu
 
 Email: lijun@lj-y.com
 
-Specification and evaluation for activities in the [ActEV](https://actev.nist.gov) context.
+Submodule for specification and evaluation of activities in the [ActEV](https://actev.nist.gov) context.
+
+## Activity format
+
+### Cube activities
+
+Spatial-temporal cube activities in a video, with optional confidence scores.
+Each activity is represented as `(type, x0, y0, x1, y1, t0, t1)`, where type is based on an enum definition.
+
+For class-agnostic proposals,
+
+```python
+import torch
+from activity_spec import CubeActivities, ProposalType
+
+cubes = torch.zeros((10, 7), dtype=torch.int)  # 10 proposals
+video_name = 'test.avi'
+proposals = CubeActivities(cubes, video_name, ProposalType)
+
+proposals.to_internal()  # Convert to pandas.DataFrame to view in jupyter
+
+save_dir = '.'
+proposals.save(save_dir)  # Save as csv
+
+load_dir = '.'   # Load from csv
+proposals = CubeActivities.load(video_name, load_dir, ProposalType)
+```
+
+For activities,
+
+```python
+import torch
+from activity_spec import CubeActivities, ActivityType
+
+cubes = torch.zeros((10, 7), dtype=torch.int)  # 10 activities
+scores = torch.zeros((10,), dtype=torch.float)
+video_name = 'test.avi'
+activities = CubeActivities(cubes, video_name, ActivityType)
+activities.set_scores(scores)
+
+activities.to_official()  # Convert to official Json structure
+```
+
+See details [cube.py](cube.py).
+
+## Scorer
+
+Run [ActEV_Scorer](https://github.com/usnistgov/ActEV_Scorer.git) with [actev-datasets](https://github.com/CMU-INF-DIVA/actev-datasets).
+The ActEV_Scorer is called in parallel for each type of activity.
+
+```sh
+cd ..
+python -m activity_spec.evaluate <dataset_dir> <subset_name> <prediction_file> <evaluation_dir>
+# For example
+python -m activity_spec.evaluate \
+    actev-datasets/meva \
+    kitware_eo_s1-train_171 \
+    experiments/xxx/output.json \
+    experiments/xxx/eval
+```
