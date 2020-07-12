@@ -11,7 +11,7 @@ Submodule for specification and evaluation of activities in the [ActEV](https://
 ### Cube activities
 
 Spatial-temporal cube activities in a video, with optional confidence scores.
-Each activity is represented as `(type, x0, y0, x1, y1, t0, t1)`, where type is based on an enum definition.
+Each activity is represented as `(type, score, t0, t1, x0, y0, x1, y1)`, where type is based on an enum definition.
 
 For class-agnostic proposals,
 
@@ -19,7 +19,7 @@ For class-agnostic proposals,
 import torch
 from activity_spec import CubeActivities, ProposalType
 
-cubes = torch.zeros((10, 7), dtype=torch.int)  # 10 proposals
+cubes = torch.zeros((10, 8))  # 10 proposals
 video_name = 'test.avi'
 proposals = CubeActivities(cubes, video_name, ProposalType)
 
@@ -38,11 +38,9 @@ For activities,
 import torch
 from activity_spec import CubeActivities, ActivityType
 
-cubes = torch.zeros((10, 7), dtype=torch.int)  # 10 activities
-scores = torch.zeros((10,), dtype=torch.float)
+cubes = torch.zeros((10, 8))  # 10 activities
 video_name = 'test.avi'
 activities = CubeActivities(cubes, video_name, ActivityType)
-activities.set_scores(scores)
 
 activities.to_official()  # Convert to official Json structure
 ```

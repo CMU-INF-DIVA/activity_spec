@@ -48,10 +48,13 @@ def activity_worker(job):
         json.dump(prediction, f, indent=4)
     cmd = f'python {SCORER} {job.protocol} -a {activity_index_path} ' \
         f'-f {job.file_index_path} -r {reference_path} -s {prediction_path} ' \
-        f'-o {evaluation_dir} -v'
-    process = subprocess.run(cmd, capture_output=True, shell=True)
-    assert process.returncode == 0, 'Scorer process failed for type %s' % (
-        job.activity_type)
+        f'-o {evaluation_dir} -v -n {os.cpu_count()}'
+    process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT)
+    if process.returncode != 0:
+        logger.error('Scorer process failed for type %s: \n%s' % (
+            job.activity_type, process.stdout.decode('utf-8')))
+        raise ValueError(process.returncode)
     metrics = pd.read_csv(
         osp.join(evaluation_dir, 'scores_by_activity.csv'), '|')
     metrics = metrics[['metric_name', 'metric_value']]
@@ -115,7 +118,7 @@ def parse_args(argv=None):
     parser.add_argument('evaluation_dir', help='Path of evaluation results')
     parser.add_argument(
         '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
-    args=parser.parse_args(argv)
+    args = parser.parse_args(argv)
     return args
 
 
