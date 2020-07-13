@@ -133,7 +133,7 @@ def parse_args(argv=None):
         'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
         '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
-    parser.add_argument('--target', detault='SDL', choices=['SDL', 'TRECVID'])
+    parser.add_argument('--target', default='SDL', choices=['SDL', 'TRECVID'])
     parser.add_argument('--silent', action='store_true', help='Silent logs')
     parser.add_argument(
         '--num_process', type=int, default=os.cpu_count(),

@@ -4,16 +4,18 @@ from enum import IntEnum, auto
 class ProposalType(IntEnum):
 
     # Beginning part aligned with detectors.ObjectType
+    Unknown = -1
     Vehicle = auto()
     Person = auto()
     Bike = auto()
     VehiclePerson = auto()
     PersonPerson = auto()
-    Unknown = -1
 
 
 class ActivityTypeSDL(IntEnum):
 
+    Negative = -1
+    Ignore = 0
     person_abandons_package = auto()
     person_closes_facility_door = auto()
     person_closes_trunk = auto()
