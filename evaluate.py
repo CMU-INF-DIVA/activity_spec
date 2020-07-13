@@ -115,10 +115,11 @@ def main(args):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser('python -m %s' % (NAME))
     parser.add_argument(
-        'dataset_dir', help='Path of dataset (e.g. actev_datasets/meva)')
+        'dataset_dir', help='Directory of dataset (e.g. actev_datasets/meva)')
     parser.add_argument('subset', help='Name of subset')
     parser.add_argument('prediction_file', help='Path of system output')
-    parser.add_argument('evaluation_dir', help='Path of evaluation results')
+    parser.add_argument(
+        'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
         '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
     args = parser.parse_args(argv)
