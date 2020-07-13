@@ -12,7 +12,7 @@ class ProposalType(IntEnum):
     Unknown = -1
 
 
-class ActivityType(IntEnum):
+class ActivityTypeSDL(IntEnum):
 
     person_abandons_package = auto()
     person_closes_facility_door = auto()

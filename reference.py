@@ -1,16 +1,18 @@
 import gzip
 import json
+from enum import Enum, EnumMeta
 
 import numpy as np
 import torch
 
-from .base import ActivityType
 from .cube import CubeActivities
 
 
 class Reference(object):
 
-    def __init__(self, reference_path: str, frame_rate: int = 30):
+    def __init__(self, reference_path: str, type_names: EnumMeta,
+                 frame_rate: int = 30):
+        self.type_names = type_names
         self.frame_rate = frame_rate
         with gzip.open(reference_path, 'rt', encoding='utf-8') as f:
             reference = json.load(f)
@@ -33,10 +35,11 @@ class Reference(object):
         '''
         raw_activities = self.activities[video_name]
         if len(raw_activities) == 0:
-            return CubeActivities(torch.empty((0, 8)), video_name, ActivityType)
+            return CubeActivities(torch.empty((0, 8)), video_name,
+                                  self.type_names)
         quantized_activities = []
         for activity in raw_activities:
-            activity_type = ActivityType[activity['activity']]
+            activity_type = self.type_names[activity['activity']]
             start_end = {v: int(k) for k, v in activity['localization'][
                 video_name].items()}
             start, end = start_end[1], start_end[0]
@@ -72,7 +75,7 @@ class Reference(object):
                     quantized_activities.append(quantized_activity)
         quantized_activities = torch.as_tensor(np.stack(quantized_activities))
         quantized_cubes = CubeActivities(
-            quantized_activities, video_name, ActivityType)
+            quantized_activities, video_name, self.type_names)
         return quantized_cubes
 
     def _get_box(self, activity, video_name, start, end):

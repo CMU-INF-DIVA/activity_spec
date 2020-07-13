@@ -1,5 +1,5 @@
 __author__ = 'Lijun Yu'
 
-from .base import ActivityType, ProposalType
+from .base import ActivityTypeSDL, ProposalType
 from .cube import CubeActivities
 from .reference import Reference

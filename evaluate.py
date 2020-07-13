@@ -112,7 +112,12 @@ def main(args):
     metrics_mean = metrics.mean(axis=1).to_frame()
     metrics_mean.columns = ['mean']
     metrics_mean.to_csv(osp.join(args.evaluation_dir, 'metrics.csv'))
-    keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'w_p_miss@0.04tfa']
+    if args.target == 'SDL':
+        keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'w_p_miss@0.04tfa']
+    elif args.target == 'TRECVID':
+        keys = ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']
+    else:
+        raise NotImplementedError(args.target)
     logger.info('Metrics: \n\t%s', '\n\t'.join(['%s = %.4f' % (
         key, metrics_mean.loc[key, 'mean']) for key in keys]))
     return metrics_mean
@@ -128,6 +133,7 @@ def parse_args(argv=None):
         'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
         '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
+    parser.add_argument('--target', detault='SDL', choices=['SDL', 'TRECVID'])
     parser.add_argument('--silent', action='store_true', help='Silent logs')
     parser.add_argument(
         '--num_process', type=int, default=os.cpu_count(),
