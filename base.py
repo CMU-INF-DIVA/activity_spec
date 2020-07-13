@@ -1,23 +1,52 @@
-from enum import IntEnum
+from enum import IntEnum, auto
 
-# Beginning part aligned with detectors.ObjectType
-ProposalType = IntEnum('ProposalType', [
-    'Vehicle', 'Person', 'Bike', 'PersonVehicle'], module=__name__)
 
-ActivityType = IntEnum('ActivityType', [
-    'person_abandons_package', 'person_closes_facility_door',
-    'person_closes_trunk', 'person_closes_vehicle_door',
-    'person_embraces_person', 'person_enters_scene_through_structure',
-    'person_enters_vehicle', 'person_exits_scene_through_structure',
-    'person_exits_vehicle', 'hand_interacts_with_person',
-    'person_carries_heavy_object', 'person_interacts_with_laptop',
-    'person_loads_vehicle', 'person_transfers_object',
-    'person_opens_facility_door', 'person_opens_trunk',
-    'person_opens_vehicle_door', 'person_talks_to_person',
-    'person_picks_up_object', 'person_purchases', 'person_reads_document',
-    'person_rides_bicycle', 'person_puts_down_object', 'person_sits_down',
-    'person_stands_up', 'person_talks_on_phone', 'person_texts_on_phone',
-    'person_steals_object', 'person_unloads_vehicle',
-    'vehicle_drops_off_person', 'vehicle_picks_up_person', 'vehicle_reverses',
-    'vehicle_starts', 'vehicle_stops', 'vehicle_turns_left',
-    'vehicle_turns_right', 'vehicle_makes_u_turn'], module=__name__)
+class ProposalType(IntEnum):
+
+    # Beginning part aligned with detectors.ObjectType
+    Vehicle = auto()
+    Person = auto()
+    Bike = auto()
+    VehiclePerson = auto()
+    PersonPerson = auto()
+
+
+class ActivityType(IntEnum):
+
+    person_abandons_package = auto()
+    person_closes_facility_door = auto()
+    person_closes_trunk = auto()
+    person_closes_vehicle_door = auto()
+    person_embraces_person = auto()
+    person_enters_scene_through_structure = auto()
+    person_enters_vehicle = auto()
+    person_exits_scene_through_structure = auto()
+    person_exits_vehicle = auto()
+    hand_interacts_with_person = auto()
+    person_carries_heavy_object = auto()
+    person_interacts_with_laptop = auto()
+    person_loads_vehicle = auto()
+    person_transfers_object = auto()
+    person_opens_facility_door = auto()
+    person_opens_trunk = auto()
+    person_opens_vehicle_door = auto()
+    person_talks_to_person = auto()
+    person_picks_up_object = auto()
+    person_purchases = auto()
+    person_reads_document = auto()
+    person_rides_bicycle = auto()
+    person_puts_down_object = auto()
+    person_sits_down = auto()
+    person_stands_up = auto()
+    person_talks_on_phone = auto()
+    person_texts_on_phone = auto()
+    person_steals_object = auto()
+    person_unloads_vehicle = auto()
+    vehicle_drops_off_person = auto()
+    vehicle_picks_up_person = auto()
+    vehicle_reverses = auto()
+    vehicle_starts = auto()
+    vehicle_stops = auto()
+    vehicle_turns_left = auto()
+    vehicle_turns_right = auto()
+    vehicle_makes_u_turn = auto()

@@ -24,11 +24,11 @@ class Reference(object):
             activities_by_video[video_name].append(activity)
         return activities_by_video
 
-    def get_quantized_cubes(self, video_name: str, stride: int = 32,
-                            box_mode: str = 'start'):
+    def get_quantized_cubes(self, video_name: str, cube_length: int = 32):
         '''
         Convert reference into quantized cubes with fixed length.
         Cube score is the temporal overlap between a cube and the reference.
+        Spatial size is the union of all frames in the clip.
         A cube is ignored if it can never be matched by the scorer.
         '''
         raw_activities = self.activities[video_name]
@@ -42,8 +42,8 @@ class Reference(object):
             start, end = start_end[1], start_end[0]
             length = end - start
             cube_starts = np.arange(
-                start // stride, end // stride + 1) * stride
-            cube_ends = cube_starts + stride
+                start // cube_length, end // cube_length + 1) * cube_length
+            cube_ends = cube_starts + cube_length
             activity_starts = cube_starts.copy()
             activity_starts[0] = start
             activity_ends = cube_ends.copy()
@@ -57,12 +57,12 @@ class Reference(object):
             for cube_i in range(valid.shape[0]):
                 if valid[cube_i]:
                     box = self._get_box(
-                        activity, video_name, activity_starts[cube_i],
-                        activity_ends[cube_i], box_mode)
+                        activity, video_name,
+                        activity_starts[cube_i], activity_ends[cube_i])
                     if box is None:
                         continue
                     overlap = (activity_ends[cube_i] -
-                               activity_starts[cube_i]) / stride
+                               activity_starts[cube_i]) / cube_length
                     quantized_activity = np.empty(8, dtype=np.float32)
                     quantized_activity[0] = activity_type
                     quantized_activity[1] = overlap
@@ -75,30 +75,23 @@ class Reference(object):
             quantized_activities, video_name, ActivityType)
         return quantized_cubes
 
-    def _get_box(self, activity, video_name, start, end, mode):
-        if mode == 'start':
-            return self._get_box_at(activity, video_name, start)
-        else:
-            raise NotImplementedError(mode)
-
-    def _get_box_at(self, activity, video_name, frame_id):
-        frame_id = str(frame_id)
+    def _get_box(self, activity, video_name, start, end):
         boxes = []
-        for obj in activity['objects']:
-            obj = obj['localization'][video_name]
-            if frame_id not in obj or 'boundingBox' not in obj[frame_id]:
-                continue
-            box = obj[frame_id]['boundingBox']
-            box = np.array([box['x'], box['y'], box['w'], box['h']],
-                           dtype=np.int)
-            box[2:] += box[:2]
-            boxes.append(box)
+        for frame_id in range(start, end):
+            frame_id = str(frame_id)
+            for obj in activity['objects']:
+                obj = obj['localization'][video_name]
+                if frame_id not in obj or 'boundingBox' not in obj[frame_id]:
+                    continue
+                box = obj[frame_id]['boundingBox']
+                box = np.array([box['x'], box['y'], box['w'], box['h']],
+                               dtype=np.int)
+                box[2:] += box[:2]
+                boxes.append(box)
         if len(boxes) == 0:
             return None
-        if len(boxes) == 1:
-            return boxes[0]
         boxes = np.stack(boxes)
         box = np.empty(4)
-        box[:2] = boxes[:, :2].min()
-        box[2:] = boxes[:, 2:].max()
+        box[:2] = boxes[:, :2].min(axis=0)
+        box[2:] = boxes[:, 2:].max(axis=0)
         return box
