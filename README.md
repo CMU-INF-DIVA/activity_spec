@@ -6,9 +6,9 @@ Email: lijun@lj-y.com
 
 Submodule for specification and evaluation of activities in the [ActEV](https://actev.nist.gov) context.
 
-## Activity format
+## Activity Format
 
-### Cube activities
+### Cube Activities
 
 Spatial-temporal cube activities in a video, with optional confidence scores.
 Each activity is represented as `(type, score, t0, t1, x0, y0, x1, y1)`, where type is based on an enum definition.
