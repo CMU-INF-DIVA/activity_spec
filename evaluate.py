@@ -109,6 +109,7 @@ def main(args):
     keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'w_p_miss@0.04tfa']
     logger.info('Metrics: \n\t%s', '\n\t'.join(['%s = %.4f' % (
         key, metrics_mean.loc[key, 'mean']) for key in keys]))
+    return metrics_mean
 
 
 def parse_args(argv=None):
