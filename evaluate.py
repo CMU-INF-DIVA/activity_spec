@@ -1,6 +1,7 @@
 import argparse
 import gzip
 import json
+import logging
 import os
 import os.path as osp
 import subprocess
@@ -54,7 +55,7 @@ def activity_worker(job):
     if process.returncode != 0:
         logger.error('Scorer process failed for type %s: \n%s' % (
             job.activity_type, process.stdout.decode('utf-8')))
-        raise ValueError(process.returncode)
+        raise ValueError('Scorer returned %d' % (process.returncode))
     metrics = pd.read_csv(
         osp.join(evaluation_dir, 'scores_by_activity.csv'), '|')
     metrics = metrics[['metric_name', 'metric_value']]
@@ -66,6 +67,8 @@ def activity_worker(job):
 
 
 def main(args):
+    if args.silent:
+        logger.setLevel(logging.WARN)
     logger.info('Running with args: \n\t%s', '\n\t'.join([
                 '%s = %s' % (k, v) for k, v in vars(args).items()]))
     os.makedirs(args.evaluation_dir, exist_ok=True)
@@ -76,12 +79,12 @@ def main(args):
     reference_path = osp.join(
         args.dataset_dir, 'meta/reference/%s.json.gz' % (args.subset))
     logger.info('Using file index: %s', file_index_path)
-    logger.info('Loading reference: %s', reference_path)
-    with gzip.open(reference_path, 'rt', encoding='utf-8') as f:
-        reference = json.load(f)
     logger.info('Loading prediction: %s', args.prediction_file)
     with open(args.prediction_file) as f:
         prediction = json.load(f)
+    logger.info('Loading reference: %s', reference_path)
+    with gzip.open(reference_path, 'rt', encoding='utf-8') as f:
+        reference = json.load(f)
     assert set(reference['filesProcessed']) == set(
         prediction['filesProcessed']), 'File list does not match'
     file_list = reference['filesProcessed']
@@ -97,9 +100,12 @@ def main(args):
             reference_by_type[activity_type],
             prediction_by_type[activity_type])
         jobs.append(job)
-    with Pool() as pool:
-        metrics = [*progressbar(pool.imap_unordered(activity_worker, jobs),
-                                'Evaluation by type', total=len(jobs))]
+    with Pool(args.num_process) as pool:
+        results_gen = pool.imap_unordered(activity_worker, jobs)
+        if not args.silent:
+            results_gen = progressbar(
+                results_gen, 'Evaluation by type', total=len(jobs))
+        metrics = [*results_gen]
     metrics = sorted(metrics, key=lambda x: x.columns[0])
     metrics = pd.concat(metrics, axis=1)
     metrics.to_csv(osp.join(args.evaluation_dir, 'metrics_by_activity.csv'))
@@ -122,6 +128,10 @@ def parse_args(argv=None):
         'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
         '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
+    parser.add_argument('--silent', action='store_true', help='Silent logs')
+    parser.add_argument(
+        '--num_process', type=int, default=os.cpu_count(),
+        help='Number of processes')
     args = parser.parse_args(argv)
     return args
 

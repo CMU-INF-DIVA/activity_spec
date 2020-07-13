@@ -9,6 +9,7 @@ class ProposalType(IntEnum):
     Bike = auto()
     VehiclePerson = auto()
     PersonPerson = auto()
+    Unknown = -1
 
 
 class ActivityType(IntEnum):
