@@ -62,3 +62,11 @@ python -m activity_spec.evaluate \
     experiments/xxx/output.json \
     experiments/xxx/eval
 ```
+
+## Dependency
+
+See [actev_base](https://github.com/CMU-INF-DIVA/actev_base).
+
+## License
+
+See [License](LICENSE).
