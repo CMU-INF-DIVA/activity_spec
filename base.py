@@ -3,12 +3,14 @@ from enum import IntEnum, auto
 
 class ProposalType(IntEnum):
 
-    # Beginning part aligned with detectors.ObjectType
     Unknown = -1
-    Vehicle = auto()
+    
+    # Aligned with detectors.ObjectType
+    Vehicle = 1
     Person = auto()
     Bike = auto()
-    VehiclePerson = auto()
+
+    VehiclePerson = 11
     PersonPerson = auto()
 
 
