@@ -101,11 +101,9 @@ def main(args):
             prediction_by_type[activity_type])
         jobs.append(job)
     with Pool(args.num_process) as pool:
-        results_gen = pool.imap_unordered(activity_worker, jobs)
-        if not args.silent:
-            results_gen = progressbar(
-                results_gen, 'Evaluation by type', total=len(jobs))
-        metrics = [*results_gen]
+        metrics = [*progressbar(
+            pool.imap_unordered(activity_worker, jobs),
+            'Evaluation by type', total=len(jobs), silent=args.silent)]
     metrics = sorted(metrics, key=lambda x: x.columns[0])
     metrics = pd.concat(metrics, axis=1)
     metrics.to_csv(osp.join(args.evaluation_dir, 'metrics_by_activity.csv'))
