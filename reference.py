@@ -1,6 +1,6 @@
 import gzip
 import json
-from enum import Enum, EnumMeta
+from enum import EnumMeta
 
 import numpy as np
 import torch

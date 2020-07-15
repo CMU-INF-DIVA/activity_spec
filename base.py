@@ -4,7 +4,7 @@ from enum import IntEnum, auto
 class ProposalType(IntEnum):
 
     Unknown = -1
-    
+
     # Aligned with detectors.ObjectType
     Vehicle = 1
     Person = auto()
@@ -14,7 +14,7 @@ class ProposalType(IntEnum):
     PersonPerson = auto()
 
 
-class ActivityTypeSDL(IntEnum):
+class ActivityTypeMEVA(IntEnum):
 
     Negative = -1
     Ignore = 0
@@ -55,3 +55,47 @@ class ActivityTypeSDL(IntEnum):
     vehicle_turns_left = auto()
     vehicle_turns_right = auto()
     vehicle_makes_u_turn = auto()
+
+
+class ActivityTypeVIRAT(IntEnum):
+
+    Negative = -1
+    Ignore = 0
+    person_closes_facility_or_vehicle_door = auto()
+    person_closes_trunk = auto()
+    vehicle_drops_off_person = auto()
+    person_enters_facility_or_vehicle = auto()
+    person_exits_facility_or_vehicle = auto()
+    person_interacts_object = auto()
+    person_loads_vehicle = auto()
+    person_opens_trunk = auto()
+    person_opens_facility_or_vehicle_door = auto()
+    person_person_interaction = auto()
+    person_pickups_object = auto()
+    vehicle_picks_up_person = auto()
+    person_pulls_object = auto()
+    person_pushs_object = auto()
+    person_rides_bicycle = auto()
+    person_sets_down_object = auto()
+    person_talks_to_person = auto()
+    person_carries_heavy_object = auto()
+    person_unloads_vehicle = auto()
+    person_carries_object = auto()
+    person_crouches = auto()
+    person_gestures = auto()
+    person_runs = auto()
+    person_sits = auto()
+    person_stands = auto()
+    person_walks = auto()
+    person_talks_on_phone = auto()
+    person_texts_on_phone = auto()
+    person_uses_tool = auto()
+    vehicle_moves = auto()
+    vehicle_starts = auto()
+    vehicle_stops = auto()
+    vehicle_turns_left = auto()
+    vehicle_turns_right = auto()
+    vehicle_makes_u_turn = auto()
+
+
+ActivityTypes = {'MEVA': ActivityTypeMEVA, 'VIRAT': ActivityTypeVIRAT}
