@@ -1,5 +1,6 @@
 import os.path as osp
 from enum import EnumMeta
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -48,18 +49,40 @@ class CubeActivities(object):
         return activities
 
     def save(self, save_dir: str):
+        '''
+        Save as csv file in save_dir.
+        '''
         df = self.to_internal()
         filename = self._get_internal_filename(self.video_name, save_dir)
         df.to_csv(filename)
 
     @classmethod
     def load(cls, video_name: str, load_dir: str, type_names: EnumMeta):
+        '''
+        Load from csv file in load_dir.
+        '''
         filename = cls._get_internal_filename(video_name, load_dir)
         df = pd.read_csv(filename, index_col=0)
         df['type'] = df['type'].apply(lambda v: type_names[v].value)
         cubes = torch.as_tensor(df[cls.CUBE_COLUMNS].values.astype(np.float32))
         obj = cls(cubes, video_name, type_names)
         return obj
+
+    def spatial_enlarge(self, enlarge_rate: float, spatial_limit: Tuple):
+        '''
+        Enlarge spatial boxes.
+        enlarge_rate: enlarge rate in each axis.
+        spatial_limit: (x, y), frame size.
+        '''
+        spatial_size = self.cubes[:, 6:8] - self.cubes[:, 4:6]
+        enlarge_size = spatial_size * enlarge_rate
+        new_cubes = self.cubes.clone()
+        new_cubes[:, 4:6] = torch.clamp(
+            self.cubes[:, 4:6] - enlarge_size, min=0)
+        new_cubes[:, 6:8] = torch.min(
+            self.cubes[:, 6:8] + enlarge_size,
+            torch.as_tensor([spatial_limit], dtype=torch.float))
+        return CubeActivities(new_cubes, self.video_name, self.type_names)
 
     @staticmethod
     def _get_internal_filename(video_name, data_dir):
