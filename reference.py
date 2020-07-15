@@ -26,7 +26,7 @@ class Reference(object):
             activities_by_video[video_name].append(activity)
         return activities_by_video
 
-    def get_quantized_cubes(self, video_name: str, cube_length: int = 32):
+    def get_quantized_cubes(self, video_name: str, cube_length: int):
         '''
         Convert reference into quantized cubes with fixed length.
         Cube score is the temporal overlap between a cube and the reference.
