@@ -26,7 +26,8 @@ class Reference(object):
             activities_by_video[video_name].append(activity)
         return activities_by_video
 
-    def get_quantized_cubes(self, video_name: str, cube_length: int):
+    def get_quantized_cubes(self, video_name: str, cube_length: int,
+                            stride: int):
         '''
         Convert reference into quantized cubes with fixed length.
         Cube score is the temporal overlap between a cube and the reference.
@@ -38,19 +39,17 @@ class Reference(object):
             return CubeActivities(torch.empty((0, 8)), video_name,
                                   self.type_names)
         quantized_activities = []
-        for activity in raw_activities:
+        for act_id, activity in enumerate(raw_activities):
             activity_type = self.type_names[activity['activity']]
             start_end = {v: int(k) for k, v in activity['localization'][
                 video_name].items()}
             start, end = start_end[1], start_end[0]
             length = end - start
             cube_starts = np.arange(
-                start // cube_length, end // cube_length + 1) * cube_length
+                start // stride, end // stride + 1) * stride
             cube_ends = cube_starts + cube_length
-            activity_starts = cube_starts.copy()
-            activity_starts[0] = start
-            activity_ends = cube_ends.copy()
-            activity_ends[-1] = end
+            activity_starts = np.maximum(cube_starts, start)
+            activity_ends = np.minimum(cube_ends, end)
             if length < self.frame_rate:
                 # intersection >= 50% * reference
                 valid = (activity_ends - activity_starts) >= length / 2
@@ -66,12 +65,13 @@ class Reference(object):
                         continue
                     overlap = (activity_ends[cube_i] -
                                activity_starts[cube_i]) / cube_length
-                    quantized_activity = np.empty(8, dtype=np.float32)
-                    quantized_activity[0] = activity_type
-                    quantized_activity[1] = overlap
-                    quantized_activity[2] = cube_starts[cube_i]
-                    quantized_activity[3] = cube_ends[cube_i]
-                    quantized_activity[4:8] = box
+                    quantized_activity = np.empty(9, dtype=np.float32)
+                    quantized_activity[0] = act_id
+                    quantized_activity[1] = activity_type
+                    quantized_activity[2] = overlap
+                    quantized_activity[3] = cube_starts[cube_i]
+                    quantized_activity[4] = cube_ends[cube_i]
+                    quantized_activity[5:9] = box
                     quantized_activities.append(quantized_activity)
         quantized_activities = torch.as_tensor(np.stack(quantized_activities))
         quantized_cubes = CubeActivities(

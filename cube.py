@@ -11,14 +11,15 @@ class CubeActivities(object):
 
     '''
     Activities each as a spatial-temporal cube.
-    cubes: [(type, score, t0, t1, x0, y0, x1, y1)].
+    cubes: [(id, type, score, t0, t1, x0, y0, x1, y1)].
+    Although stored as float, id and type should be int values.
     '''
 
-    CUBE_COLUMNS = ['type', 'score', 't0', 't1', 'x0', 'y0', 'x1', 'y1']
+    CUBE_COLUMNS = ['id', 'type', 'score', 't0', 't1', 'x0', 'y0', 'x1', 'y1']
 
     def __init__(self, cubes: torch.Tensor, video_name: str,
                  type_names: EnumMeta):
-        assert cubes.ndim == 2 and cubes.shape[1] == 8, \
+        assert cubes.ndim == 2 and cubes.shape[1] == len(self.CUBE_COLUMNS), \
             'Proposal format invalid'
         self.cubes = cubes
         self.video_name = video_name
@@ -74,13 +75,15 @@ class CubeActivities(object):
         enlarge_rate: enlarge rate in each axis.
         spatial_limit: (x, y), frame size.
         '''
-        spatial_size = self.cubes[:, 6:8] - self.cubes[:, 4:6]
+        x0, y0, x1, y1 = [self.CUBE_COLUMNS.index(name) for name in [
+            'x0', 'y0', 'x1', 'y1']]
+        spatial_size = self.cubes[:, [x1, y1]] - self.cubes[:, [x0, y0]]
         enlarge_size = spatial_size * enlarge_rate
         new_cubes = self.cubes.clone()
-        new_cubes[:, 4:6] = torch.clamp(
-            self.cubes[:, 4:6] - enlarge_size, min=0)
-        new_cubes[:, 6:8] = torch.min(
-            self.cubes[:, 6:8] + enlarge_size,
+        new_cubes[:, [x0, y0]] = torch.clamp(
+            self.cubes[:, [x0, y0]] - enlarge_size, min=0)
+        new_cubes[:, [x1, y1]] = torch.min(
+            self.cubes[:, [x1, y1]] + enlarge_size,
             torch.as_tensor([spatial_limit], dtype=torch.float))
         return CubeActivities(new_cubes, self.video_name, self.type_names)
 
