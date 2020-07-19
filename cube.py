@@ -1,10 +1,23 @@
 import os.path as osp
-from enum import EnumMeta
+from enum import EnumMeta, IntEnum, auto
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
 import torch
+
+
+class CubeColumns(IntEnum):
+
+    id = 0
+    type = auto()
+    score = auto()
+    t0 = auto()
+    t1 = auto()
+    x0 = auto()
+    y0 = auto()
+    x1 = auto()
+    y1 = auto()
 
 
 class CubeActivities(object):
@@ -15,21 +28,24 @@ class CubeActivities(object):
     Although stored as float, id and type should be int values.
     '''
 
-    CUBE_COLUMNS = ['id', 'type', 'score', 't0', 't1', 'x0', 'y0', 'x1', 'y1']
-
     def __init__(self, cubes: torch.Tensor, video_name: str,
                  type_names: EnumMeta):
-        assert cubes.ndim == 2 and cubes.shape[1] == len(self.CUBE_COLUMNS), \
+        assert cubes.ndim == 2 and cubes.shape[1] == len(CubeColumns), \
             'Proposal format invalid'
         self.cubes = cubes
         self.video_name = video_name
         self.type_names = type_names
+        self.columns = CubeColumns
+
+    def __len__(self):
+        return self.cubes.shape[0]
 
     def to_internal(self):
         '''
         Internal storage format as pd.DataFrame.
         '''
-        df = pd.DataFrame(self.cubes.cpu().numpy(), columns=self.CUBE_COLUMNS)
+        df = pd.DataFrame(self.cubes.cpu().numpy(), columns=[
+            c.name for c in CubeColumns])
         df['type'] = df['type'].apply(lambda v: self.type_names(v).name)
         return df
 
@@ -39,13 +55,15 @@ class CubeActivities(object):
         only contains temporal and type information.
         '''
         activities = []
-        for cube_i in range(self.cubes.shape[0]):
-            type_id, score, t0, t1, _, _, _, _ = self.cubes[cube_i].tolist()
+        for cube in self.cubes:
+            activity_type = self.type_names(
+                int(round(cube[CubeColumns.type].item()))).name
+            score = cube[CubeColumns.score].item()
+            t0 = int(cube[CubeColumns.t0].item())
+            t1 = int(cube[CubeColumns.t1].item())
             activity = {
-                'activity': self.type_names(type_id).name,
-                'localization': {
-                    self.video_name: {str(int(t0)): 1, str(int(t1)): 0}},
-                'presenceConf': score}
+                'activity': activity_type, 'presenceConf': score,
+                'localization': {self.video_name: {str(t0): 1, str(t1): 0}}}
             activities.append(activity)
         return activities
 
@@ -65,7 +83,8 @@ class CubeActivities(object):
         filename = cls._get_internal_filename(video_name, load_dir)
         df = pd.read_csv(filename, index_col=0)
         df['type'] = df['type'].apply(lambda v: type_names[v].value)
-        cubes = torch.as_tensor(df[cls.CUBE_COLUMNS].values.astype(np.float32))
+        cubes = torch.as_tensor(df[
+            [c.name for c in CubeColumns]].values.astype(np.float32))
         obj = cls(cubes, video_name, type_names)
         return obj
 
@@ -75,15 +94,15 @@ class CubeActivities(object):
         enlarge_rate: enlarge rate in each axis.
         spatial_limit: (x, y), frame size.
         '''
-        x0, y0, x1, y1 = [self.CUBE_COLUMNS.index(name) for name in [
-            'x0', 'y0', 'x1', 'y1']]
-        spatial_size = self.cubes[:, [x1, y1]] - self.cubes[:, [x0, y0]]
+        spatial_size = self.cubes[:, [CubeColumns.x1, CubeColumns.y1]] - \
+            self.cubes[:, [CubeColumns.x0, CubeColumns.y0]]
         enlarge_size = spatial_size * enlarge_rate
         new_cubes = self.cubes.clone()
-        new_cubes[:, [x0, y0]] = torch.clamp(
-            self.cubes[:, [x0, y0]] - enlarge_size, min=0)
-        new_cubes[:, [x1, y1]] = torch.min(
-            self.cubes[:, [x1, y1]] + enlarge_size,
+        new_cubes[:, [CubeColumns.x0, CubeColumns.y0]] = torch.clamp(
+            self.cubes[:, [CubeColumns.x0, CubeColumns.y0]] - enlarge_size,
+            min=0)
+        new_cubes[:, [CubeColumns.x1, CubeColumns.y1]] = torch.min(
+            self.cubes[:, [CubeColumns.x1, CubeColumns.y1]] + enlarge_size,
             torch.as_tensor([spatial_limit], dtype=torch.float))
         return CubeActivities(new_cubes, self.video_name, self.type_names)
 

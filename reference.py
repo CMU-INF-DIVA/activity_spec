@@ -29,10 +29,9 @@ class Reference(object):
     def get_quantized_cubes(self, video_name: str, cube_length: int,
                             stride: int):
         '''
-        Convert reference into quantized cubes with fixed length.
+        Convert reference into quantized cubes with fixed length and stride.
         Cube score is the temporal overlap between a cube and the reference.
         Spatial size is the union of all frames in the clip.
-        A cube is ignored if it can never be matched by the scorer.
         '''
         raw_activities = self.activities[video_name]
         if len(raw_activities) == 0:
@@ -43,36 +42,31 @@ class Reference(object):
             activity_type = self.type_names[activity['activity']]
             start_end = {v: int(k) for k, v in activity['localization'][
                 video_name].items()}
-            start, end = start_end[1], start_end[0]
-            length = end - start
+            activity_start, activity_end = start_end[1], start_end[0]
+            first_cube_idx = int(max(0, np.ceil(
+                (activity_start - cube_length + 1) / stride)))
+            last_cube_idx = int(np.floor((activity_end - 1) / stride))
             cube_starts = np.arange(
-                start // stride, end // stride + 1) * stride
+                first_cube_idx, last_cube_idx + 1) * stride
             cube_ends = cube_starts + cube_length
-            activity_starts = np.maximum(cube_starts, start)
-            activity_ends = np.minimum(cube_ends, end)
-            if length < self.frame_rate:
-                # intersection >= 50% * reference
-                valid = (activity_ends - activity_starts) >= length / 2
-            else:
-                # intersection >= 1 second
-                valid = (activity_ends - activity_starts) >= self.frame_rate
-            for cube_i in range(valid.shape[0]):
-                if valid[cube_i]:
-                    box = self._get_box(
-                        activity, video_name,
-                        activity_starts[cube_i], activity_ends[cube_i])
-                    if box is None:
-                        continue
-                    overlap = (activity_ends[cube_i] -
-                               activity_starts[cube_i]) / cube_length
-                    quantized_activity = np.empty(9, dtype=np.float32)
-                    quantized_activity[0] = act_id
-                    quantized_activity[1] = activity_type
-                    quantized_activity[2] = overlap
-                    quantized_activity[3] = cube_starts[cube_i]
-                    quantized_activity[4] = cube_ends[cube_i]
-                    quantized_activity[5:9] = box
-                    quantized_activities.append(quantized_activity)
+            activity_starts = np.maximum(cube_starts, activity_start)
+            activity_ends = np.minimum(cube_ends, activity_end)
+            for cube_i in range(cube_starts.shape[0]):
+                box = self._get_box(
+                    activity, video_name,
+                    activity_starts[cube_i], activity_ends[cube_i])
+                if box is None:
+                    continue
+                overlap = (activity_ends[cube_i] -
+                           activity_starts[cube_i]) / cube_length
+                quantized_activity = np.empty(9, dtype=np.float32)
+                quantized_activity[0] = act_id
+                quantized_activity[1] = activity_type
+                quantized_activity[2] = overlap
+                quantized_activity[3] = cube_starts[cube_i]
+                quantized_activity[4] = cube_ends[cube_i]
+                quantized_activity[5:9] = box
+                quantized_activities.append(quantized_activity)
         quantized_activities = torch.as_tensor(np.stack(quantized_activities))
         quantized_cubes = CubeActivities(
             quantized_activities, video_name, self.type_names)
