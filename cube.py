@@ -40,6 +40,10 @@ class CubeActivities(object):
     def __len__(self):
         return self.cubes.shape[0]
 
+    def __repr__(self):
+        return '%s(%d@%s)' % (
+            self.__class__.__name__, len(self), self.video_name)
+
     def to_internal(self):
         '''
         Internal storage format as pd.DataFrame.
