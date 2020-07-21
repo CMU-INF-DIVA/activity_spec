@@ -125,7 +125,8 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser('python -m %s' % (NAME))
     parser.add_argument(
         'dataset_dir', help='Directory of dataset (e.g. actev_datasets/meva)')
-    parser.add_argument('subset', help='Name of subset')
+    parser.add_argument(
+        'subset', help='Name of subset (e.g. kitware_eo_s2-train_158)')
     parser.add_argument('prediction_file', help='Path of system output')
     parser.add_argument(
         'evaluation_dir', help='Directory of evaluation results')
