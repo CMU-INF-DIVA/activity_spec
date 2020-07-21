@@ -1,6 +1,6 @@
 import os.path as osp
-from enum import Enum, EnumMeta, IntEnum, auto
-from typing import Tuple
+from enum import EnumMeta, IntEnum, auto
+from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -29,7 +29,8 @@ class CubeActivities(object):
     '''
 
     def __init__(self, cubes: torch.Tensor, video_name: str,
-                 type_names: EnumMeta, columns: EnumMeta = CubeColumns):
+                 type_names: Union[None, EnumMeta],
+                 columns: EnumMeta = CubeColumns):
         assert cubes.ndim == 2 and cubes.shape[1] == len(columns), \
             'Proposal format invalid'
         self.cubes = cubes
@@ -50,7 +51,8 @@ class CubeActivities(object):
         '''
         df = pd.DataFrame(self.cubes.cpu().numpy(), columns=[
             c.name for c in self.columns])
-        df['type'] = df['type'].apply(lambda v: self.type_names(v).name)
+        if 'type' in df and self.type_names is not None:
+            df['type'] = df['type'].apply(lambda v: self.type_names(v).name)
         return df
 
     def to_official(self):
@@ -80,17 +82,19 @@ class CubeActivities(object):
         df.to_csv(filename)
 
     @classmethod
-    def load(cls, video_name: str, load_dir: str, type_names: EnumMeta,
+    def load(cls, video_name: str, load_dir: str,
+             type_names: Union[None, EnumMeta] = None,
              columns: EnumMeta = CubeColumns):
         '''
         Load from csv file in load_dir.
         '''
         filename = cls._get_internal_filename(video_name, load_dir)
         df = pd.read_csv(filename, index_col=0)
-        df['type'] = df['type'].apply(lambda v: type_names[v].value)
+        if 'type' in df and type_names is not None:
+            df['type'] = df['type'].apply(lambda v: type_names[v].value)
         cubes = torch.as_tensor(df[
             [c.name for c in columns]].values.astype(np.float32))
-        obj = cls(cubes, video_name, type_names)
+        obj = cls(cubes, video_name, type_names, columns)
         return obj
 
     def spatial_enlarge(self, enlarge_rate: float, spatial_limit: Tuple):
