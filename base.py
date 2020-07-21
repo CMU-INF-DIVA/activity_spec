@@ -16,8 +16,7 @@ class ProposalType(IntEnum):
 
 class ActivityTypeMEVA(IntEnum):
 
-    Negative = -1
-    Ignore = 0
+    Negative = 0
     person_abandons_package = auto()
     person_closes_facility_door = auto()
     person_closes_trunk = auto()
@@ -59,8 +58,7 @@ class ActivityTypeMEVA(IntEnum):
 
 class ActivityTypeVIRAT(IntEnum):
 
-    Negative = -1
-    Ignore = 0
+    Negative = 0
     person_closes_facility_or_vehicle_door = auto()
     person_closes_trunk = auto()
     vehicle_drops_off_person = auto()

@@ -1,5 +1,5 @@
 import os.path as osp
-from enum import EnumMeta, IntEnum, auto
+from enum import Enum, EnumMeta, IntEnum, auto
 from typing import Tuple
 
 import numpy as np
@@ -29,13 +29,13 @@ class CubeActivities(object):
     '''
 
     def __init__(self, cubes: torch.Tensor, video_name: str,
-                 type_names: EnumMeta):
-        assert cubes.ndim == 2 and cubes.shape[1] == len(CubeColumns), \
+                 type_names: EnumMeta, columns: EnumMeta = CubeColumns):
+        assert cubes.ndim == 2 and cubes.shape[1] == len(columns), \
             'Proposal format invalid'
         self.cubes = cubes
         self.video_name = video_name
         self.type_names = type_names
-        self.columns = CubeColumns
+        self.columns = columns
 
     def __len__(self):
         return self.cubes.shape[0]
@@ -49,7 +49,7 @@ class CubeActivities(object):
         Internal storage format as pd.DataFrame.
         '''
         df = pd.DataFrame(self.cubes.cpu().numpy(), columns=[
-            c.name for c in CubeColumns])
+            c.name for c in self.columns])
         df['type'] = df['type'].apply(lambda v: self.type_names(v).name)
         return df
 
@@ -61,10 +61,10 @@ class CubeActivities(object):
         activities = []
         for cube in self.cubes:
             activity_type = self.type_names(
-                int(round(cube[CubeColumns.type].item()))).name
-            score = cube[CubeColumns.score].item()
-            t0 = int(cube[CubeColumns.t0].item())
-            t1 = int(cube[CubeColumns.t1].item())
+                int(round(cube[self.columns.type].item()))).name
+            score = cube[self.columns.score].item()
+            t0 = int(cube[self.columns.t0].item())
+            t1 = int(cube[self.columns.t1].item())
             activity = {
                 'activity': activity_type, 'presenceConf': score,
                 'localization': {self.video_name: {str(t0): 1, str(t1): 0}}}
@@ -80,7 +80,8 @@ class CubeActivities(object):
         df.to_csv(filename)
 
     @classmethod
-    def load(cls, video_name: str, load_dir: str, type_names: EnumMeta):
+    def load(cls, video_name: str, load_dir: str, type_names: EnumMeta,
+             columns: EnumMeta = CubeColumns):
         '''
         Load from csv file in load_dir.
         '''
@@ -88,7 +89,7 @@ class CubeActivities(object):
         df = pd.read_csv(filename, index_col=0)
         df['type'] = df['type'].apply(lambda v: type_names[v].value)
         cubes = torch.as_tensor(df[
-            [c.name for c in CubeColumns]].values.astype(np.float32))
+            [c.name for c in columns]].values.astype(np.float32))
         obj = cls(cubes, video_name, type_names)
         return obj
 
@@ -98,15 +99,15 @@ class CubeActivities(object):
         enlarge_rate: enlarge rate in each axis.
         spatial_limit: (x, y), frame size.
         '''
-        spatial_size = self.cubes[:, [CubeColumns.x1, CubeColumns.y1]] - \
-            self.cubes[:, [CubeColumns.x0, CubeColumns.y0]]
+        spatial_size = self.cubes[:, [self.columns.x1, self.columns.y1]] - \
+            self.cubes[:, [self.columns.x0, self.columns.y0]]
         enlarge_size = spatial_size * enlarge_rate
         new_cubes = self.cubes.clone()
-        new_cubes[:, [CubeColumns.x0, CubeColumns.y0]] = torch.clamp(
-            self.cubes[:, [CubeColumns.x0, CubeColumns.y0]] - enlarge_size,
+        new_cubes[:, [self.columns.x0, self.columns.y0]] = torch.clamp(
+            self.cubes[:, [self.columns.x0, self.columns.y0]] - enlarge_size,
             min=0)
-        new_cubes[:, [CubeColumns.x1, CubeColumns.y1]] = torch.min(
-            self.cubes[:, [CubeColumns.x1, CubeColumns.y1]] + enlarge_size,
+        new_cubes[:, [self.columns.x1, self.columns.y1]] = torch.min(
+            self.cubes[:, [self.columns.x1, self.columns.y1]] + enlarge_size,
             torch.as_tensor([spatial_limit], dtype=torch.float))
         return CubeActivities(new_cubes, self.video_name, self.type_names)
 
