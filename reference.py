@@ -73,7 +73,7 @@ class Reference(object):
                 quantized_activities.append(quantized_activity)
         quantized_activities = torch.as_tensor(np.stack(quantized_activities))
         quantized_cubes = CubeActivities(
-            quantized_activities, video_name, self.type_names)
+            quantized_activities, video_name, self.type_names, CubeColumns)
         return quantized_cubes
 
     def _get_box(self, activity, video_name, start, end):
