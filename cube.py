@@ -29,8 +29,7 @@ class CubeActivities(object):
     '''
 
     def __init__(self, cubes: torch.Tensor, video_name: str,
-                 type_names: Union[None, EnumMeta],
-                 columns: EnumMeta = CubeColumns):
+                 type_names: Union[None, EnumMeta], columns: EnumMeta):
         assert cubes.ndim == 2 and cubes.shape[1] == len(columns), \
             'Proposal format invalid'
         self.cubes = cubes
@@ -83,8 +82,7 @@ class CubeActivities(object):
 
     @classmethod
     def load(cls, video_name: str, load_dir: str,
-             type_names: Union[None, EnumMeta] = None,
-             columns: EnumMeta = CubeColumns):
+             type_names: Union[None, EnumMeta], columns: EnumMeta):
         '''
         Load from csv file in load_dir.
         '''
@@ -113,7 +111,8 @@ class CubeActivities(object):
         new_cubes[:, [self.columns.x1, self.columns.y1]] = torch.min(
             self.cubes[:, [self.columns.x1, self.columns.y1]] + enlarge_size,
             torch.as_tensor([spatial_limit], dtype=torch.float))
-        return CubeActivities(new_cubes, self.video_name, self.type_names)
+        return CubeActivities(
+            new_cubes, self.video_name, self.type_names, self.columns)
 
     @staticmethod
     def _get_internal_filename(video_name, data_dir):

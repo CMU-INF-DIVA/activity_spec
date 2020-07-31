@@ -17,11 +17,11 @@ For class-agnostic proposals,
 
 ```python
 import torch
-from activity_spec import CubeActivities, ProposalType
+from activity_spec import CubeActivities, CubeColumns, ProposalType
 
-cubes = torch.zeros((10, 8))  # 10 proposals
+cubes = torch.zeros((10, len(CubeColumns)))  # 10 proposals
 video_name = 'test.avi'
-proposals = CubeActivities(cubes, video_name, ProposalType)
+proposals = CubeActivities(cubes, video_name, ProposalType, CubeColumns)
 
 proposals.to_internal()  # Convert to pandas.DataFrame to view in jupyter
 
@@ -29,20 +29,22 @@ save_dir = '.'
 proposals.save(save_dir)  # Save as csv
 
 load_dir = '.'   # Load from csv
-proposals = CubeActivities.load(video_name, load_dir, ProposalType)
+proposals = CubeActivities.load(video_name, load_dir, ProposalType, CubeColumns)
 ```
 
 For activities,
 
 ```python
 import torch
-from activity_spec import CubeActivities, ActivityType
+from activity_spec import ActivityTypes, CubeActivities, CubeColumns
 
-cubes = torch.zeros((10, 8))  # 10 activities
+cubes = torch.zeros((10, len(CubeColumns)))  # 10 activities
 video_name = 'test.avi'
-activities = CubeActivities(cubes, video_name, ActivityType)
+dataset = 'MEVA'
+cube_acts = CubeActivities(
+    cubes, video_name, ActivityTypes[dataset], CubeColumns)
 
-activities.to_official()  # Convert to official Json structure
+cube_acts.to_official()  # Convert to official Json structure
 ```
 
 See details [cube.py](cube.py).
