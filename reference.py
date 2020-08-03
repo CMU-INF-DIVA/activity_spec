@@ -39,7 +39,8 @@ class Reference(object):
         raw_activities = self.activities[video_name]
         if len(raw_activities) == 0:
             return CubeActivities(
-                torch.empty((0, len(CubeColumns))), video_name, self.type_names)
+                torch.empty((0, len(CubeColumns))), video_name,
+                self.type_names, CubeColumns)
         quantized_activities = []
         for act_id, activity in enumerate(raw_activities):
             activity_type = self.type_names[activity['activity']]
