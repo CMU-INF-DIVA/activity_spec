@@ -27,15 +27,15 @@ class Reference(object):
             activities_by_video[video_name].append(activity)
         return activities_by_video
 
-    def get_quantized_cubes(self, video_name: str, cube_length: int,
+    def get_quantized_cubes(self, video_name: str, duration: int,
                             stride: Union[None, int] = None):
         '''
-        Convert reference into quantized cubes with fixed length and stride.
-        By default stride equals to cube length, so cubes are non-overlapped.
+        Convert reference into quantized cubes with fixed duration and stride.
+        By default stride equals to duration, so cubes are non-overlapped.
         Cube score is the temporal overlap between a cube and the reference.
         Spatial size is the union of all frames in the clip.
         '''
-        stride = stride or cube_length
+        stride = stride or duration
         raw_activities = self.activities[video_name]
         if len(raw_activities) == 0:
             return CubeActivities(
@@ -48,11 +48,11 @@ class Reference(object):
                 video_name].items()}
             activity_start, activity_end = start_end[1], start_end[0]
             first_cube_idx = int(max(0, np.ceil(
-                (activity_start - cube_length + 1) / stride)))
+                (activity_start - duration + 1) / stride)))
             last_cube_idx = int(np.floor((activity_end - 1) / stride))
             cube_starts = np.arange(
                 first_cube_idx, last_cube_idx + 1) * stride
-            cube_ends = cube_starts + cube_length
+            cube_ends = cube_starts + duration
             activity_starts = np.maximum(cube_starts, activity_start)
             activity_ends = np.minimum(cube_ends, activity_end)
             for cube_i in range(cube_starts.shape[0]):
@@ -62,7 +62,7 @@ class Reference(object):
                 if box is None:
                     continue
                 overlap = (activity_ends[cube_i] -
-                           activity_starts[cube_i]) / cube_length
+                           activity_starts[cube_i]) / duration
                 quantized_activity = np.empty(
                     len(CubeColumns), dtype=np.float32)
                 quantized_activity[CubeColumns.id] = act_id
