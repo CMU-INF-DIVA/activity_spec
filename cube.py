@@ -111,8 +111,25 @@ class CubeActivities(object):
         new_cubes[:, [self.columns.x1, self.columns.y1]] = torch.min(
             self.cubes[:, [self.columns.x1, self.columns.y1]] + enlarge_size,
             torch.as_tensor([spatial_limit], dtype=torch.float))
-        return CubeActivities(
+        return type(self)(
             new_cubes, self.video_name, self.type_names, self.columns)
+
+    def duplicate_with(self, cubes: Union[None, torch.Tensor] = None, *,
+                       selection: Union[None, torch.Tensor] = None,
+                       video_name: Union[None, str] = None,
+                       type_names: Union[None, EnumMeta] = None,
+                       columns: EnumMeta = None):
+        '''
+        Create a new instance with the same attributes unless specified.
+        Cubes can be selected via the selection argument.
+        '''
+        cubes = cubes or self.cubes
+        if selection is not None:
+            cubes = cubes[selection]
+        video_name = video_name or self.video_name
+        type_names = type_names or self.type_names
+        columns = columns or self.columns
+        return type(self)(cubes, video_name, type_names, columns)
 
     @staticmethod
     def _get_internal_filename(video_name, data_dir):
