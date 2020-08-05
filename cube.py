@@ -31,7 +31,7 @@ class CubeActivities(object):
     def __init__(self, cubes: torch.Tensor, video_name: str,
                  type_names: Union[None, EnumMeta], columns: EnumMeta):
         assert cubes.ndim == 2 and cubes.shape[1] == len(columns), \
-            'Proposal format invalid'
+            'Cube activity format invalid'
         self.cubes = cubes
         self.video_name = video_name
         self.type_names = type_names
@@ -123,7 +123,7 @@ class CubeActivities(object):
         Create a new instance with the same attributes unless specified.
         Cubes can be selected via the selection argument.
         '''
-        cubes = cubes or self.cubes
+        cubes = cubes if cubes is not None else self.cubes
         if selection is not None:
             cubes = cubes[selection]
         video_name = video_name or self.video_name
