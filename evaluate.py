@@ -52,10 +52,7 @@ def activity_worker(job):
         f'-o {evaluation_dir} -v -n {os.cpu_count()}'
     process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
-    if process.returncode != 0:
-        logger.error('Scorer process failed for type %s: \n%s' % (
-            job.activity_type, process.stdout.decode('utf-8')))
-        raise ValueError('Scorer returned %d' % (process.returncode))
+    process.check_returncode()
     metrics = pd.read_csv(
         osp.join(evaluation_dir, 'scores_by_activity.csv'), '|')
     metrics = metrics[['metric_name', 'metric_value']]
