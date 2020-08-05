@@ -1,4 +1,4 @@
-# Activity-spec
+# Activity Specification
 
 Author: Lijun Yu
 
