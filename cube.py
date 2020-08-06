@@ -1,6 +1,6 @@
 import os.path as osp
 from enum import EnumMeta, IntEnum, auto
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -130,6 +130,10 @@ class CubeActivities(object):
         type_names = type_names or self.type_names
         columns = columns or self.columns
         return type(self)(cubes, video_name, type_names, columns)
+
+    def merge_with(self, cube_acts_list: List, **kwargs):
+        cubes = torch.cat([self.cubes] + [c.cubes for c in cube_acts_list])
+        return self.duplicate_with(cubes, **kwargs)
 
     @staticmethod
     def _get_internal_filename(video_name, data_dir):
