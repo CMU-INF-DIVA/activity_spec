@@ -111,8 +111,7 @@ class CubeActivities(object):
         new_cubes[:, [self.columns.x1, self.columns.y1]] = torch.min(
             self.cubes[:, [self.columns.x1, self.columns.y1]] + enlarge_size,
             torch.as_tensor([spatial_limit], dtype=torch.float))
-        return type(self)(
-            new_cubes, self.video_name, self.type_names, self.columns)
+        return self.duplicate_with(new_cubes)
 
     def duplicate_with(self, cubes: Union[None, torch.Tensor] = None, *,
                        selection: Union[None, torch.Tensor] = None,
