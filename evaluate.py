@@ -20,7 +20,7 @@ Job = namedtuple('Job', [
     'file_list', 'reference_activities', 'prediction_activities',
     'max_activity_length'])
 
-logger = get_logger(NAME)
+logger = get_logger(NAME.split('.')[-1])
 
 
 def group_activities_by_type(activities):
@@ -96,12 +96,25 @@ def main(args):
         length = {v: int(k) for k, v in attributes['selected'].items()}[0] - 1
         video_length += length
     max_activity_length = video_length * args.tfa_threshold
-    logger.info('Total video length: %d frames', video_length)
-    logger.info('Max activity length %d frames at TFA threshold %.2f',
+    logger.info('Video length: %d frames', video_length)
+    logger.info('Per-type activity length %d frames at TFA threshold %.2f',
                 max_activity_length, args.tfa_threshold)
     logger.info('Loading prediction: %s', args.prediction_file)
     with open(args.prediction_file) as f:
         prediction = json.load(f)
+    total_prediction_length = 0
+    for act in prediction['activities']:
+        frame_id_1, frame_id_2 = [*[*act['localization'].values()][0].keys()]
+        length = abs(int(frame_id_1) - int(frame_id_2))
+        total_prediction_length += length
+    prediction_types = len(set([act['activity']
+                                for act in prediction['activities']]))
+    average_prediction_length = total_prediction_length // prediction_types
+    prediction_tfa = average_prediction_length / video_length
+    logger.info('Prediction length: %d frames of %d types',
+                total_prediction_length, prediction_types)
+    logger.info('Per-type average activity length %d frames with TFA %.2f',
+                average_prediction_length, prediction_tfa)
     logger.info('Loading reference: %s', reference_path)
     with gzip.open(reference_path, 'rt', encoding='utf-8') as f:
         reference = json.load(f)
