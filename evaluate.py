@@ -17,7 +17,8 @@ NAME = '%s.%s' % (__package__, osp.splitext(osp.basename(__file__))[0])
 Job = namedtuple('Job', [
     'activity_type', 'evaluation_dir', 'protocol',
     'file_index_path', 'activity_index_dir',
-    'file_list', 'reference_activities', 'prediction_activities'])
+    'file_list', 'reference_activities', 'prediction_activities',
+    'max_activity_length'])
 
 logger = get_logger(NAME)
 
@@ -37,14 +38,26 @@ def activity_worker(job):
     os.makedirs(evaluation_dir, exist_ok=True)
     activity_index_path = osp.join(
         job.activity_index_dir, '%s.json' % (job.activity_type))
-    reference_path = osp.join(evaluation_dir, 'reference.json')
-    prediction_path = osp.join(evaluation_dir, 'prediction.json')
     reference = {'filesProcessed': job.file_list,
                  'activities': job.reference_activities}
-    prediction = {'filesProcessed': job.file_list,
-                  'activities': job.prediction_activities}
+    reference_path = osp.join(evaluation_dir, 'reference.json')
     with open(reference_path, 'w') as f:
         json.dump(reference, f, indent=4)
+    selected_activities = []
+    sorted_activities = sorted(
+        job.prediction_activities, key=lambda a: a['presenceConf'],
+        reverse=True)
+    current_length = 0
+    for act in sorted_activities:
+        frame_id_1, frame_id_2 = [*[*act['localization'].values()][0].keys()]
+        length = abs(int(frame_id_1) - int(frame_id_2))
+        current_length += length
+        selected_activities.append(act)
+        if current_length > job.max_activity_length:
+            break
+    prediction = {'filesProcessed': job.file_list,
+                  'activities': selected_activities}
+    prediction_path = osp.join(evaluation_dir, 'prediction.json')
     with open(prediction_path, 'w') as f:
         json.dump(prediction, f, indent=4)
     cmd = f'python {SCORER} {job.protocol} -a {activity_index_path} ' \
@@ -75,7 +88,17 @@ def main(args):
         args.dataset_dir, 'meta/activity-index/single')
     reference_path = osp.join(
         args.dataset_dir, 'meta/reference/%s.json.gz' % (args.subset))
-    logger.info('Using file index: %s', file_index_path)
+    logger.info('Loading file index: %s', file_index_path)
+    with open(file_index_path) as f:
+        file_index = json.load(f)
+    video_length = 0
+    for attributes in file_index.values():
+        length = {v: int(k) for k, v in attributes['selected'].items()}[0] - 1
+        video_length += length
+    max_activity_length = video_length * args.tfa_threshold
+    logger.info('Total video length: %d frames', video_length)
+    logger.info('Max activity length %d frames at TFA threshold %.2f',
+                max_activity_length, args.tfa_threshold)
     logger.info('Loading prediction: %s', args.prediction_file)
     with open(args.prediction_file) as f:
         prediction = json.load(f)
@@ -95,7 +118,8 @@ def main(args):
             activity_type, args.evaluation_dir, args.protocol,
             file_index_path, activity_index_dir, file_list,
             reference_by_type[activity_type],
-            prediction_by_type[activity_type])
+            prediction_by_type[activity_type],
+            max_activity_length)
         jobs.append(job)
     with Pool(args.num_process) as pool:
         metrics = [*progressbar(
@@ -129,7 +153,12 @@ def parse_args(argv=None):
         'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
         '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
-    parser.add_argument('--target', default='SDL', choices=['SDL', 'TRECVID'])
+    parser.add_argument(
+        '--target', default='SDL', choices=['SDL', 'TRECVID'],
+        help='Evaluation target, only affects the metrics to be printed')
+    parser.add_argument(
+        '--tfa_threshold', type=float, default=0.4,
+        help='Time-based false alarm threshold to filter redundant instances')
     parser.add_argument('--silent', action='store_true', help='Silent logs')
     parser.add_argument(
         '--num_process', type=int, default=os.cpu_count(),
