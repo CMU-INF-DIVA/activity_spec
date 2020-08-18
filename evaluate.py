@@ -145,7 +145,7 @@ def main(args):
     metrics_mean.columns = ['mean']
     metrics_mean.to_csv(osp.join(args.evaluation_dir, 'metrics.csv'))
     if args.target == 'SDL':
-        keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'w_p_miss@0.04tfa']
+        keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa']
     elif args.target == 'TRECVID':
         keys = ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']
     else:
