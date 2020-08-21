@@ -29,7 +29,7 @@ save_dir = '.'
 proposals.save(save_dir)  # Save as csv
 
 load_dir = '.'   # Load from csv
-proposals = CubeActivities.load(video_name, load_dir, ProposalType, CubeColumns)
+proposals = CubeActivities.load(video_name, load_dir, ProposalType)
 ```
 
 For activities,
