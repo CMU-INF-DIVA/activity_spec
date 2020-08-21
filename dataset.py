@@ -13,34 +13,35 @@ from .cube import CubeActivities
 
 class VideoDataset(Dataset):
 
-    def __init__(self, file_index_path, video_dir, proposal_dir, label_dir,
+    def __init__(self, file_index_path, proposal_dir, label_dir,
                  dataset='MEVA'):
         with open(file_index_path) as f:
             self.file_index = [*json.load(f).items()]
-        self.video_dir = video_dir
         self.proposal_dir = proposal_dir
         self.label_dir = label_dir
         self.dataset = dataset
         self.activity_types = ActivityTypes[dataset]
 
     def __getitem__(self, idx):
-        video_name, _ = self.file_index[idx]
+        video_name, video_meta = self.file_index[idx]
         proposal = CubeActivities.load(
             video_name, self.proposal_dir, ProposalType)
         label = CubeActivities.load(
             video_name, self.label_dir, None)
-        video_path = osp.join(self.video_dir, video_name)
-        return video_path, proposal, label
+        return video_name, video_meta, proposal, label
 
 
 Frame = namedtuple('Frame', ['id', 'image'])
+Metadata = namedtuple('Metadata', [
+    'video_name', 't0', 't1', 'x0', 'x1', 'y0', 'y1'])
 
 
 class ProposalInVideo(IterableDataset):
 
-    def __init__(self, video_path, proposal, label,
+    def __init__(self, video_name, proposal, label, video_dir,
                  enlarge_rate=None, stride=1):
-        self.video_path = video_path
+        self.video_name = video_name
+        self.video_path = osp.join(video_dir, video_name)
         self.proposal = proposal
         self.label = label
         self.enlarge_rate = enlarge_rate
@@ -81,9 +82,10 @@ class ProposalInVideo(IterableDataset):
             x0, y0 = prop[columns.x0:columns.y0 + 1].type(torch.int).tolist()
             x1, y1 = prop[columns.x1:columns.y1 + 1].ceil().type(
                 torch.int).tolist()
+            meta = Metadata(self.video_name, t0, t1, x0, x1, y0, y1)
             frames = self.load_frames(video, t0, t1, frame_buffer)
             clip = torch.as_tensor(frames[:, y0:y1, x0:x1])
-            yield clip, label
+            yield clip, label, meta
         video.close()
         frame_buffer.clear()
 
@@ -93,11 +95,12 @@ class ProposalInVideo(IterableDataset):
 
 class ProposalDataset(IterableDataset):
 
-    def __init__(self, file_index_path, video_dir, proposal_dir, label_dir,
+    def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
                  dataset='MEVA', enlarge_rate=0.1, stride=2,
                  clip_transform=None, label_transform=None):
         self.video_dataset = VideoDataset(
-            file_index_path, video_dir, proposal_dir, label_dir, dataset)
+            file_index_path, proposal_dir, label_dir, dataset)
+        self.video_dir = video_dir
         self.enlarge_rate = enlarge_rate
         self.stride = stride
         self.clip_transform = clip_transform
@@ -111,11 +114,12 @@ class ProposalDataset(IterableDataset):
             video_dataset = Subset(self.video_dataset, indices)
         else:
             video_dataset = self.video_dataset
-        for video_path, proposal, label in video_dataset:
-            for clip, label in ProposalInVideo(video_path, proposal, label,
-                                               self.enlarge_rate, self.stride):
+        for video_name, _, proposal, label in video_dataset:
+            for clip, label, meta in ProposalInVideo(
+                    video_name, proposal, label, self.video_dir,
+                    self.enlarge_rate, self.stride):
                 if self.clip_transform is not None:
                     clip = self.clip_transform(clip)
                 if self.label_transform is not None:
                     label = self.label_transform(label)
-                yield clip, label
+                yield clip, label, meta
