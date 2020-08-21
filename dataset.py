@@ -3,7 +3,6 @@ import os.path as osp
 from collections import namedtuple
 
 import numpy as np
-from numpy.core.fromnumeric import clip
 import torch
 from avi_r import AVIReader
 from torch.utils.data import Dataset, IterableDataset, Subset, get_worker_info
@@ -47,25 +46,30 @@ class ProposalInVideo(IterableDataset):
         self.enlarge_rate = enlarge_rate
         self.stride = stride
 
-    def load_frames(self, video, t0, t1):
-        self.frame_buffer = [*filter(lambda f: f.id >= t0, self.frame_buffer)]
+    def load_frames(self, video, t0, t1, frame_buffer):
+        '''
+        Return frames as T x H x W x C[RGB] in [0, 256)
+        '''
+        frame_buffer = [*filter(lambda f: f.id >= t0, frame_buffer)]
         num_frames = (t1 - t0) // self.stride
-        if len(self.frame_buffer) < num_frames:
-            if len(self.frame_buffer) == 0:
+        if len(frame_buffer) < num_frames:
+            if len(frame_buffer) == 0:
                 video.seek(t0)
             if isinstance(video, AVIReader):
                 for frame in video.get_iter(
-                        num_frames - len(self.frame_buffer), self.stride):
-                    frame = Frame(frame.frame_id, frame.numpy())
-                    self.frame_buffer.append(frame)
+                        num_frames - len(frame_buffer), self.stride):
+                    frame = Frame(frame.frame_id, frame.numpy('rgb24'))
+                    frame_buffer.append(frame)
             else:
                 raise NotImplementedError(type(video))
-        assert len(self.frame_buffer) == num_frames
-        return np.stack([f.image for f in self.frame_buffer])
+        if len(frame_buffer) < num_frames:
+            frame_buffer.extend(frame_buffer[-1:] * (
+                num_frames - len(frame_buffer)))
+        return np.stack([f.image for f in frame_buffer])
 
     def __iter__(self):
         video = AVIReader(self.video_path)
-        self.frame_buffer = []
+        frame_buffer = []
         if self.enlarge_rate is not None:
             proposal = self.proposal.spatial_enlarge(
                 self.enlarge_rate, (video.width, video.height))
@@ -77,12 +81,11 @@ class ProposalInVideo(IterableDataset):
             x0, y0 = prop[columns.x0:columns.y0 + 1].type(torch.int).tolist()
             x1, y1 = prop[columns.x1:columns.y1 + 1].ceil().type(
                 torch.int).tolist()
-            frames = self.load_frames(video, t0, t1)
+            frames = self.load_frames(video, t0, t1, frame_buffer)
             clip = torch.as_tensor(frames[:, y0:y1, x0:x1])
             yield clip, label
-        self.video.close()
-        if hasattr(self, 'frames'):
-            del self.frames
+        video.close()
+        frame_buffer.clear()
 
     def __len__(self):
         return len(self.proposal)
