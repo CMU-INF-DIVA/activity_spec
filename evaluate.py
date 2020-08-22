@@ -65,7 +65,11 @@ def activity_worker(job):
         f'-o {evaluation_dir} -v -n {os.cpu_count()}'
     process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
-    process.check_returncode()
+    try:
+        process.check_returncode()
+    except Exception as e:
+        print(process.stdout.decode('utf-8'))
+        raise e
     metrics = pd.read_csv(
         osp.join(evaluation_dir, 'scores_by_activity.csv'), '|')
     metrics = metrics[['metric_name', 'metric_value']]
