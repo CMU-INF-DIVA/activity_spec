@@ -47,6 +47,24 @@ cube_acts = CubeActivities(
 cube_acts.to_official()  # Convert to official Json structure
 ```
 
+For wrapped labels,
+
+```python
+import torch
+from activity_spec import ActivityTypes, CubeActivities
+
+video_name = 'test.avi'
+dataset = 'MEVA'
+labels = torch.zeros((10, len(ActivityTypes[dataset])))
+wrapped_labels = CubeActivities(labels, video_name, None, ActivityTypes[dataset])
+
+save_dir = '.'
+wrapped_labels.save(save_dir)  # Save as csv
+
+load_dir = '.'   # Load from csv
+wrapped_labels = CubeActivities.load(video_name, load_dir, None)
+```
+
 See details [cube.py](cube.py).
 
 ## Evaluations
