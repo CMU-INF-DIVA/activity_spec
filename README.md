@@ -49,7 +49,9 @@ cube_acts.to_official()  # Convert to official Json structure
 
 See details [cube.py](cube.py).
 
-## Scorer
+## Evaluations
+
+### ActEV Scorer in Parallel
 
 Run [ActEV_Scorer](https://github.com/usnistgov/ActEV_Scorer.git) with [actev-datasets](https://github.com/CMU-INF-DIVA/actev-datasets).
 The ActEV_Scorer is called in parallel for each type of activity.
@@ -63,6 +65,30 @@ python -m activity_spec.evaluate \
     kitware_eo_s1-train_171 \
     experiments/xxx/output.json \
     experiments/xxx/eval
+```
+
+### Proposal Evaluation
+
+For each proposal generation model, implement `Matcher` class that matches proposal and ground truth. Then use it with [evaluate_proposal.py](evaluate_proposal.py).
+
+For example,
+
+```python
+from activity_spec.evaluate_proposal import main, parse_args
+
+class Matcher(object):
+
+    def __init__(self, args):
+        ...  # Initialize something with args
+
+    def __call__(self, cube_acts_ref, cube_acts_det):
+        ...  # Match proposals with ground truth and generate labels
+        return cube_acts_labeled, wrapped_label_weights
+
+if __name__ == "__main__":
+    args = parse_args()
+    matcher = Matcher(args)
+    main(args, matcher)
 ```
 
 ## Dependency

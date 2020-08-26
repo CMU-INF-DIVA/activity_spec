@@ -1,0 +1,180 @@
+import argparse
+import json
+import os
+import os.path as osp
+from collections import Counter, namedtuple
+from concurrent.futures import ProcessPoolExecutor
+
+import numpy as np
+import pandas as pd
+import torch
+from pyturbo import get_logger, progressbar
+from torchvision.ops.boxes import box_area, box_iou
+
+from .base import ActivityTypes, ProposalType
+from .reference import Reference
+from .cube import CubeActivities
+from .evaluate import main as evaluate_main, parse_args as evaluate_args
+
+
+NAME = '%s.%s' % (__package__, osp.splitext(osp.basename(__file__))[0])
+MODES = ['IoU', 'RefCover']
+THRESHOLDS = np.arange(0, 1, 0.1)
+
+Job = namedtuple('Job', [
+    'reference', 'mode', 'threshold', 'subset', 'dataset_dir',
+    'evaluation_dir'])
+
+
+logger = get_logger(NAME)
+
+
+def get_spatial_scores(cube_acts_ref, cube_acts_det):
+    if len(cube_acts_ref) == 0 or len(cube_acts_det) == 0:
+        scores = torch.zeros((len(cube_acts_det,)))
+        spatial_scores = {'IoU': scores, 'RefCover': scores}
+        return spatial_scores
+    temporal = (cube_acts_ref.cubes[:, None, cube_acts_ref.columns.t0] ==
+                cube_acts_det.cubes[None, :, cube_acts_det.columns.t0])
+    boxes_ref = cube_acts_ref.cubes[
+        :, cube_acts_ref.columns.x0:cube_acts_ref.columns.y1 + 1]
+    boxes_det = cube_acts_det.cubes[
+        :, cube_acts_det.columns.x0:cube_acts_det.columns.y1 + 1]
+    iou = box_iou(boxes_ref, boxes_det)
+    area_ref = box_area(boxes_ref)[:, None]
+    left_top = torch.max(boxes_ref[:, None, :2], boxes_det[:, :2])
+    right_bottom = torch.min(boxes_ref[:, None, 2:], boxes_det[:, 2:])
+    width_height = (right_bottom - left_top).clamp(min=0)
+    area_inter = width_height[:, :, 0] * width_height[:, :, 1]
+    cover = area_inter / area_ref
+    spatial_scores = {'IoU': (iou * temporal).max(axis=0).values,
+                      'RefCover': (cover * temporal).max(axis=0).values}
+    return spatial_scores
+
+
+def threshold_worker(job):
+    reference = job.reference
+    reference['activities'] = [act for act in reference['activities']
+                               if act[job.mode] >= job.threshold]
+    labeled_prop_path = osp.join(
+        job.evaluation_dir, 'labeled_prop_%s_%.1f.json' % (
+            job.mode, job.threshold))
+    with open(labeled_prop_path, 'w') as f:
+        json.dump(reference, f, indent=4)
+    evaluation_dir = osp.join(
+        job.evaluation_dir, 'eval_%s_%.1f' % (job.mode, job.threshold))
+    argv = [job.dataset_dir, job.subset, labeled_prop_path,
+            evaluation_dir, '--silent',
+            '--num_process', str(os.cpu_count() // 5)]
+    current_metric = evaluate_main(evaluate_args(argv))
+    current_metric.columns = ['%s_%.1f' % (job.mode, job.threshold)]
+    return current_metric
+
+
+def main(args, matcher):
+    logger.info('Running with args: \n\t%s', '\n\t'.join([
+                '%s = %s' % (k, v) for k, v in vars(args).items()]))
+    dataset_dir = osp.join(args.datasets_dir, args.dataset)
+    reference_path = osp.join(
+        dataset_dir, 'meta/reference/%s.json.gz' % (args.subset))
+    logger.info('Loading reference: %s', reference_path)
+    reference = Reference(reference_path, ActivityTypes[args.dataset])
+    os.makedirs(args.evaluation_dir, exist_ok=True)
+    logger.info('Assigning labels')
+    all_activities = []
+    pos_count, ref_count, det_count = 0, 0, 0
+    num_labels = []
+    for video in progressbar(reference.video_list, 'Videos'):
+        cube_acts_ref = reference.get_quantized_cubes(
+            video, args.duration, args.stride)
+        cube_acts_det = CubeActivities.load(
+            video, args.proposal_dir, ProposalType)
+        if args.enlarge_rate is not None:
+            cube_acts_det = cube_acts_det.spatial_enlarge(
+                args.enlarge_rate, args.frame_size)
+        cube_acts_labeled, wrapped_label_weights = matcher(
+            cube_acts_ref, cube_acts_det)
+        n_labels = (wrapped_label_weights.cubes[:, 1:] > 0).sum(dim=1)
+        pos_count += (n_labels > 0).sum().item()
+        ref_count += len(cube_acts_ref)
+        det_count += len(cube_acts_det)
+        num_labels.append(n_labels)
+        spatial_scores = get_spatial_scores(cube_acts_ref, cube_acts_labeled)
+        activities = cube_acts_labeled.to_official()
+        for key, value in spatial_scores.items():
+            for act, v in zip(activities, value.tolist()):
+                act[key] = v
+        all_activities.extend(activities)
+    for i, act in enumerate(all_activities):
+        act['activityID'] = i
+    labeled_prop = {'filesProcessed': reference.video_list,
+                    'activities': all_activities}
+    logger.info('Gather statistics')
+    num_labels = Counter(torch.cat(num_labels).tolist())
+    label_count = sum([k * v for k, v in num_labels.items()])
+    stats = {'cube_rates': {'positive / detection': pos_count / det_count,
+                            'positive / reference': pos_count / ref_count,
+                            'label / reference': label_count / ref_count},
+             'label_rates': {k: v / pos_count for k, v in num_labels.items()
+                             if k > 0},
+             'cube_counts': {'positive': pos_count, 'detection': det_count,
+                             'reference': ref_count},
+             'label_counts': {'total': label_count, **num_labels}}
+    with open(osp.join(args.evaluation_dir, 'stats.json'), 'w') as f:
+        json.dump(stats, f, indent=4)
+    logger.info('Statistics: \n%s', json.dumps(stats, indent=4))
+    logger.info('Evaluating')
+    jobs = []
+    for threshold in THRESHOLDS:
+        for mode in MODES:
+            job = Job(labeled_prop, mode, threshold,
+                      args.subset, dataset_dir, args.evaluation_dir)
+            jobs.append(job)
+    with ProcessPoolExecutor() as pool:
+        metrics = [*progressbar(
+            pool.map(threshold_worker, reversed(jobs)),
+            'Jobs', total=len(jobs))]
+    metrics = pd.concat(metrics, axis=1)
+    pd.set_option('max_columns', None)
+    print_keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'w_p_miss@0.04tfa']
+    all_columns = []
+    for mode in MODES:
+        columns = ['%s_%.1f' % (mode, thres) for thres in THRESHOLDS]
+        metrics['%s_avg' % (mode)] = metrics[columns].mean(axis=1)
+        columns.insert(0, '%s_avg' % (mode))
+        logger.info('Metrics in mode %s: \n%s', mode,
+                    metrics.loc[print_keys, columns])
+        all_columns.extend(columns)
+    metrics = metrics[all_columns]
+    metrics.to_csv(osp.join(args.evaluation_dir, 'metrics.csv'))
+    return metrics
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser('python -m %s' % (NAME))
+    parser.add_argument(
+        'subset', help='Name of subset (e.g. kitware_eo_s2-train_158)')
+    parser.add_argument(
+        'proposal_dir', help='Directory containing proposals')
+    parser.add_argument(
+        'evaluation_dir', help='Directory to store evaluation results')
+    parser.add_argument(
+        '--dataset', default='MEVA', choices=[*ActivityTypes.keys()],
+        help='Dataset name')
+    parser.add_argument(
+        '--duration', default=64, type=int,
+        help='Duration of a proposal (default: 64 frames)')
+    parser.add_argument(
+        '--stride', default=16, type=int,
+        help='Stride between proposals (default: 16 frames)')
+    parser.add_argument(
+        '--enlarge_rate', default=None, type=float,
+        help='Spatial enlarge rate of proposal')
+    parser.add_argument(
+        '--frame_size', default=[1920, 1080], type=int, nargs=2,
+        help='Image size (width, height) of a frame, (default: [1920, 1080])')
+    parser.add_argument(
+        '--datasets_dir', help='Directory of datasets (actev-datsets repo)',
+        default=osp.join(osp.dirname(__file__), '../../datasets'))
+    args = parser.parse_args(argv)
+    return args
