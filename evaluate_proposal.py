@@ -85,7 +85,7 @@ def threshold_worker(job):
     return current_metric
 
 
-def main(args, assigner=default_assigner):
+def main(args, assigner):
     logger.info('Running with args: \n\t%s', '\n\t'.join([
                 '%s = %s' % (k, v) for k, v in vars(args).items()]))
     dataset_dir = osp.join(args.datasets_dir, args.dataset)
@@ -183,7 +183,7 @@ def parse_args(argv=None):
         help='Duration of a proposal (default: 64 frames)')
     parser.add_argument(
         '--stride', default=16, type=int,
-        help='Stride between proposals (ignored with default_assigner) '
+        help='Stride between proposals (ignored by default_assigner) '
         '(default: 16 frames)')
     parser.add_argument(
         '--enlarge_rate', default=None, type=float,
@@ -196,3 +196,7 @@ def parse_args(argv=None):
         default=osp.join(osp.dirname(__file__), '../../datasets'))
     args = parser.parse_args(argv)
     return args
+
+
+if __name__ == "__main__":
+    main(parse_args(), default_assigner)
