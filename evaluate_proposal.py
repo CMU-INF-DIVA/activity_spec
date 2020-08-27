@@ -29,17 +29,31 @@ Job = namedtuple('Job', [
 logger = get_logger(NAME)
 
 
-def get_spatial_scores(cube_acts_ref, cube_acts_det):
-    if len(cube_acts_ref) == 0 or len(cube_acts_det) == 0:
-        scores = torch.zeros((len(cube_acts_det,)))
+def default_assigner(cube_acts_prop, wrapped_label_weights):
+    prop_indices, predictions = torch.nonzero(
+        wrapped_label_weights.cubes > 0, as_tuple=True)
+    valid = predictions > 0
+    prop_indices, predictions = prop_indices[valid], predictions[valid]
+    cubes = cube_acts_prop.cubes[prop_indices]
+    cubes[:, cube_acts_prop.columns.type] = predictions
+    cubes[:, cube_acts_prop.columns.score] = wrapped_label_weights.cubes[
+        prop_indices, predictions]
+    cube_acts = cube_acts_prop.duplicate_with(
+        cubes, type_names=wrapped_label_weights.columns)
+    return cube_acts
+
+
+def get_spatial_scores(cube_acts_ref, cube_acts_prop):
+    if len(cube_acts_ref) == 0 or len(cube_acts_prop) == 0:
+        scores = torch.zeros((len(cube_acts_prop,)))
         spatial_scores = {'IoU': scores, 'RefCover': scores}
         return spatial_scores
     temporal = (cube_acts_ref.cubes[:, None, cube_acts_ref.columns.t0] ==
-                cube_acts_det.cubes[None, :, cube_acts_det.columns.t0])
+                cube_acts_prop.cubes[None, :, cube_acts_prop.columns.t0])
     boxes_ref = cube_acts_ref.cubes[
         :, cube_acts_ref.columns.x0:cube_acts_ref.columns.y1 + 1]
-    boxes_det = cube_acts_det.cubes[
-        :, cube_acts_det.columns.x0:cube_acts_det.columns.y1 + 1]
+    boxes_det = cube_acts_prop.cubes[
+        :, cube_acts_prop.columns.x0:cube_acts_prop.columns.y1 + 1]
     iou = box_iou(boxes_ref, boxes_det)
     area_ref = box_area(boxes_ref)[:, None]
     left_top = torch.max(boxes_ref[:, None, :2], boxes_det[:, :2])
@@ -71,7 +85,7 @@ def threshold_worker(job):
     return current_metric
 
 
-def main(args, matcher):
+def main(args, assigner=default_assigner):
     logger.info('Running with args: \n\t%s', '\n\t'.join([
                 '%s = %s' % (k, v) for k, v in vars(args).items()]))
     dataset_dir = osp.join(args.datasets_dir, args.dataset)
@@ -80,24 +94,26 @@ def main(args, matcher):
     logger.info('Loading reference: %s', reference_path)
     reference = Reference(reference_path, ActivityTypes[args.dataset])
     os.makedirs(args.evaluation_dir, exist_ok=True)
-    logger.info('Assigning labels')
+    logger.info('Loading proposals: %s', args.proposal_dir)
+    logger.info('Loading labels: %s', args.label_dir)
     all_activities = []
     pos_count, ref_count, det_count = 0, 0, 0
     num_labels = []
     for video in progressbar(reference.video_list, 'Videos'):
         cube_acts_ref = reference.get_quantized_cubes(
             video, args.duration, args.stride)
-        cube_acts_det = CubeActivities.load(
+        cube_acts_prop = CubeActivities.load(
             video, args.proposal_dir, ProposalType)
+        wrapped_label_weights = CubeActivities.load(
+            video, args.label_dir, None)
+        cube_acts_labeled = assigner(cube_acts_prop, wrapped_label_weights)
         if args.enlarge_rate is not None:
-            cube_acts_det = cube_acts_det.spatial_enlarge(
+            cube_acts_prop = cube_acts_prop.spatial_enlarge(
                 args.enlarge_rate, args.frame_size)
-        cube_acts_labeled, wrapped_label_weights = matcher(
-            cube_acts_ref, cube_acts_det)
         n_labels = (wrapped_label_weights.cubes[:, 1:] > 0).sum(dim=1)
         pos_count += (n_labels > 0).sum().item()
         ref_count += len(cube_acts_ref)
-        det_count += len(cube_acts_det)
+        det_count += len(cube_acts_prop)
         num_labels.append(n_labels)
         spatial_scores = get_spatial_scores(cube_acts_ref, cube_acts_labeled)
         activities = cube_acts_labeled.to_official()
@@ -156,6 +172,7 @@ def parse_args(argv=None):
         'subset', help='Name of subset (e.g. kitware_eo_s2-train_158)')
     parser.add_argument(
         'proposal_dir', help='Directory containing proposals')
+    parser.add_argument('label_dir', help='Directory containing labels')
     parser.add_argument(
         'evaluation_dir', help='Directory to store evaluation results')
     parser.add_argument(
@@ -166,7 +183,8 @@ def parse_args(argv=None):
         help='Duration of a proposal (default: 64 frames)')
     parser.add_argument(
         '--stride', default=16, type=int,
-        help='Stride between proposals (default: 16 frames)')
+        help='Stride between proposals (ignored with default_assigner) '
+        '(default: 16 frames)')
     parser.add_argument(
         '--enlarge_rate', default=None, type=float,
         help='Spatial enlarge rate of proposal')
@@ -174,7 +192,7 @@ def parse_args(argv=None):
         '--frame_size', default=[1920, 1080], type=int, nargs=2,
         help='Image size (width, height) of a frame, (default: [1920, 1080])')
     parser.add_argument(
-        '--datasets_dir', help='Directory of datasets (actev-datsets repo)',
+        '--datasets_dir', help='Directory of datasets (actev-datasets repo)',
         default=osp.join(osp.dirname(__file__), '../../datasets'))
     args = parser.parse_args(argv)
     return args
