@@ -72,21 +72,22 @@ class CubeActivities(object):
             activities.append(activity)
         return activities
 
-    def save(self, save_dir: str):
+    def save(self, save_dir: str, suffix: str = ''):
         '''
         Save as csv file in save_dir.
         '''
         df = self.to_internal()
-        filename = self._get_internal_filename(self.video_name, save_dir)
+        filename = self._get_internal_filename(
+            self.video_name, suffix, save_dir)
         df.to_csv(filename)
 
     @classmethod
     def load(cls, video_name: str, load_dir: str,
-             type_names: Union[None, EnumMeta]):
+             type_names: Union[None, EnumMeta], suffix: str = ''):
         '''
         Load from csv file in load_dir.
         '''
-        filename = cls._get_internal_filename(video_name, load_dir)
+        filename = cls._get_internal_filename(video_name, suffix, load_dir)
         df = pd.read_csv(filename, index_col=0)
         if 'type' in df and type_names is not None:
             df['type'] = df['type'].apply(lambda v: type_names[v].value)
@@ -136,5 +137,5 @@ class CubeActivities(object):
         return self.duplicate_with(cubes, **kwargs)
 
     @staticmethod
-    def _get_internal_filename(video_name, data_dir):
-        return osp.join(data_dir, osp.splitext(video_name)[0] + '.csv')
+    def _get_internal_filename(video_name, suffix, data_dir):
+        return osp.join(data_dir, osp.splitext(video_name)[0] + suffix + '.csv')
