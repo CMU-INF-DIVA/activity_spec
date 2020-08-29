@@ -48,8 +48,10 @@ def get_spatial_scores(cube_acts_ref, cube_acts_prop):
         scores = torch.zeros((len(cube_acts_prop,)))
         spatial_scores = {'IoU': scores, 'RefCover': scores}
         return spatial_scores
-    temporal = (cube_acts_ref.cubes[:, None, cube_acts_ref.columns.t0] ==
-                cube_acts_prop.cubes[None, :, cube_acts_prop.columns.t0])
+    ref_time = cube_acts_ref.cubes[:, cube_acts_ref.columns.t0].type(torch.int)
+    prop_time = cube_acts_prop.cubes[
+        :, cube_acts_prop.columns.t0].type(torch.int)
+    temporal = ref_time.unsqueeze(1) == prop_time.unsqueeze(0)
     boxes_ref = cube_acts_ref.cubes[
         :, cube_acts_ref.columns.x0:cube_acts_ref.columns.y1 + 1]
     boxes_det = cube_acts_prop.cubes[
