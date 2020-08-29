@@ -185,8 +185,7 @@ def parse_args(argv=None):
         help='Duration of a proposal (default: 64 frames)')
     parser.add_argument(
         '--stride', default=16, type=int,
-        help='Stride between proposals (ignored by default_assigner) '
-        '(default: 16 frames)')
+        help='Stride between proposals (default: 16 frames)')
     parser.add_argument(
         '--enlarge_rate', default=None, type=float,
         help='Spatial enlarge rate of proposal')
