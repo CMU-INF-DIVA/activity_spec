@@ -14,13 +14,14 @@ from .cube import CubeActivities
 class VideoDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir,
-                 dataset='MEVA'):
+                 dataset='MEVA', negative_fraction=None):
         with open(file_index_path) as f:
             self.file_index = [*json.load(f).items()]
         self.proposal_dir = proposal_dir
         self.label_dir = label_dir
         self.dataset = dataset
         self.activity_types = ActivityTypes[dataset]
+        self.negative_fraction = negative_fraction
 
     def __getitem__(self, idx):
         video_name, video_meta = self.file_index[idx]
@@ -28,6 +29,19 @@ class VideoDataset(Dataset):
             video_name, self.proposal_dir, ProposalType)
         label = CubeActivities.load(
             video_name, self.label_dir, None)
+        if self.negative_fraction is not None:
+            selected = label.cubes[:, 0] == 0
+            negative_indices = (~selected).nonzero().squeeze(1)
+            num_positive = len(label) - len(negative_indices)
+            num_negative = int(round(
+                num_positive * self.negative_fraction))
+            print(len(label), len(negative_indices), negative_indices)
+            negative_indices = negative_indices[np.random.permutation(
+                len(negative_indices))[:num_negative]]
+            print(len(negative_indices), negative_indices)
+            selected[negative_indices] = True
+            proposal = proposal.duplicate_with(selection=selected)
+            label = label.duplicate_with(selection=selected)
         return video_name, video_meta, proposal, label
 
 
@@ -96,10 +110,11 @@ class ProposalInVideo(IterableDataset):
 class ProposalDataset(IterableDataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
-                 dataset='MEVA', enlarge_rate=0.1, stride=2,
-                 clip_transform=None, label_transform=None):
+                 dataset='MEVA', *, negative_fraction=None, enlarge_rate=None, 
+                 stride=1, clip_transform=None, label_transform=None):
         self.video_dataset = VideoDataset(
-            file_index_path, proposal_dir, label_dir, dataset)
+            file_index_path, proposal_dir, label_dir, dataset, 
+            negative_fraction)
         self.video_dir = video_dir
         self.enlarge_rate = enlarge_rate
         self.stride = stride
