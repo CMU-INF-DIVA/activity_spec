@@ -11,7 +11,7 @@ Submodule for specification and evaluation of activities in the [ActEV](https://
 ### Cube Activities
 
 Spatial-temporal cube activities in a video, with optional confidence scores.
-Each activity is represented as `(type, score, t0, t1, x0, y0, x1, y1)`, where type is based on an enum definition.
+Each activity is represented as `(id, type, score, t0, t1, x0, y0, x1, y1)`, where type is based on an enum definition.
 
 For class-agnostic proposals,
 
@@ -65,7 +65,20 @@ load_dir = '.'   # Load from csv
 wrapped_labels = CubeActivities.load(video_name, load_dir, None)
 ```
 
-See details [cube.py](cube.py).
+See details at [cube.py](cube.py).
+
+### Dataset
+
+Generate a clip dataset based on proposals and labels. Number of negative samples can be controlled via the `negative_fraction` argument.
+
+```python
+from activity_spec import ProposalDataset
+dataset = ProposalDataset(file_index_path, proposal_dir, label_dir,
+                          video_dir, negative_fraction=1.)
+clip, label = dataset[0]
+```
+
+See details at [dataset.py](dataset.py).
 
 ## Evaluations
 
@@ -80,7 +93,7 @@ python -m activity_spec.evaluate <dataset_dir> <subset_name> <prediction_file> <
 # For example
 python -m activity_spec.evaluate \
     actev-datasets/meva \
-    kitware_eo_s1-train_171 \
+    kitware_eo_s2-test_99 \
     experiments/xxx/output.json \
     experiments/xxx/eval
 ```
