@@ -45,13 +45,14 @@ Proposal = namedtuple('Proposal', ['video_name', 'localization', 'label'])
 class ProposalDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
-                 dataset='MEVA', *, negative_fraction=None, enlarge_rate=None,
-                 stride=1, clip_transform=None, label_transform=None):
+                 dataset='MEVA', *, negative_fraction=None,
+                 spatial_enlarge_rate=None, stride=1, clip_transform=None,
+                 label_transform=None):
         self.video_dataset = VideoDataset(
             file_index_path, proposal_dir, label_dir, dataset)
         self.video_dir = video_dir
         self.negative_fraction = negative_fraction
-        self.enlarge_rate = enlarge_rate
+        self.spatial_enlarge_rate = spatial_enlarge_rate
         self.stride = stride
         self.clip_transform = clip_transform
         self.label_transform = label_transform
@@ -63,6 +64,9 @@ class ProposalDataset(Dataset):
         for video_name, _, proposals, labels in progressbar(
                 self.video_dataset, 'Load proposals'):
             columns = proposals.columns
+            if self.spatial_enlarge_rate is not None:
+                proposals = proposals.spatial_enlarge(
+                    self.spatial_enlarge_rate)
             localizations = proposals.cubes[:, columns.t0:columns.y1 + 1]
             for localization, label in zip(localizations, labels.cubes):
                 proposal = Proposal(video_name, localization, label)
@@ -96,10 +100,11 @@ class ProposalDataset(Dataset):
         if len(frames) < num_frames:
             frames.extend(frames[-1:] * (num_frames - len(frames)))
         frames = np.stack(frames)
+        video.close()
         return frames
 
     def __getitem__(self, idx):
-        proposal_index = self.proposal_indices[0]
+        proposal_index = self.proposal_indices[idx]
         if proposal_index >= 0:
             proposal = self.positive_proposals[proposal_index]
         elif self.negative_fraction is None:

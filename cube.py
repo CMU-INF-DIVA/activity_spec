@@ -97,7 +97,8 @@ class CubeActivities(object):
         obj = cls(cubes, video_name, type_names, columns)
         return obj
 
-    def spatial_enlarge(self, enlarge_rate: float, spatial_limit: Tuple):
+    def spatial_enlarge(self, enlarge_rate: float,
+                        spatial_limit: Union[None, Tuple] = None):
         '''
         Enlarge spatial boxes.
         enlarge_rate: enlarge rate in each axis.
@@ -110,9 +111,12 @@ class CubeActivities(object):
         new_cubes[:, [self.columns.x0, self.columns.y0]] = torch.clamp(
             self.cubes[:, [self.columns.x0, self.columns.y0]] - enlarge_size,
             min=0)
-        new_cubes[:, [self.columns.x1, self.columns.y1]] = torch.min(
-            self.cubes[:, [self.columns.x1, self.columns.y1]] + enlarge_size,
-            torch.as_tensor([spatial_limit], dtype=torch.float))
+        new_cubes[:, [self.columns.x1, self.columns.y1]] = \
+            self.cubes[:, [self.columns.x1, self.columns.y1]] + enlarge_size
+        if spatial_limit is not None:
+            new_cubes[:, [self.columns.x1, self.columns.y1]] = torch.min(
+                new_cubes[:, [self.columns.x1, self.columns.y1]],
+                torch.as_tensor([spatial_limit], dtype=torch.float))
         return self.duplicate_with(new_cubes)
 
     def duplicate_with(self, cubes: Union[None, torch.Tensor] = None, *,
