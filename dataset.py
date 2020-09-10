@@ -1,12 +1,12 @@
 import json
 import random
-import os.path as osp
 from collections import namedtuple
 
 import numpy as np
 import torch
 from avi_r import AVIReader
 from torch.utils.data import Dataset
+from pyturbo import progressbar
 
 from .base import ActivityTypes, ProposalType
 from .cube import CubeActivities
@@ -16,6 +16,7 @@ class VideoDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir=None,
                  dataset='MEVA'):
+        self.file_index_path = file_index_path
         with open(file_index_path) as f:
             self.file_index = [*json.load(f).items()]
         self.proposal_dir = proposal_dir
@@ -34,9 +35,11 @@ class VideoDataset(Dataset):
             labels = None
         return video_name, video_meta, proposals, labels
 
+    def __len__(self):
+        return len(self.file_index)
 
-Proposal = namedtuple('Proposal', [
-    'video_name', 't0', 't1', 'x0', 'x1', 'y0', 'y1', 'label'])
+
+Proposal = namedtuple('Proposal', ['video_name', 'localization', 'label'])
 
 
 class ProposalDataset(Dataset):
@@ -57,29 +60,28 @@ class ProposalDataset(Dataset):
     def load_proposals(self):
         self.positive_proposals = []
         self.negative_proposals = []
-        for video_name, _, proposals, labels in self.video_dataset:
+        for video_name, _, proposals, labels in progressbar(
+                self.video_dataset, 'Load proposals'):
             columns = proposals.columns
-            for proposal, label in zip(proposals.cubes, labels.cubes):
-                t0, t1 = proposal[columns.t0:columns.t1 + 1].type(
-                    torch.int).tolist()
-                x0, y0 = proposal[columns.x0:columns.y0 + 1].type(
-                    torch.int).tolist()
-                x1, y1 = proposal[columns.x1:columns.y1 + 1].ceil().type(
-                    torch.int).tolist()
-                proposal = Proposal(video_name, t0, t1, x0, x1, y0, y1, label)
+            localizations = proposals.cubes[:, columns.t0:columns.y1 + 1]
+            for localization, label in zip(localizations, labels.cubes):
+                proposal = Proposal(video_name, localization, label)
                 if label[0] > 0:
                     self.negative_proposals.append(proposal)
                 else:
                     self.positive_proposals.append(proposal)
         if self.negative_fraction is None:
             self.negative_quota = len(self.negative_proposals)
+            indices = np.concatenate([
+                np.arange(len(self.positive_proposals)),
+                np.full(self.negative_quota, -1, dtype=np.int)])
+            self.proposal_indices = np.random.permutation(indices)
         else:
             self.negative_quota = int(round(
                 len(self.positive_proposals) * self.negative_fraction))
-        indices = np.concatenate([
-            np.arange(len(self.positive_proposals)),
-            np.full(self.negative_quota, -1, dtype=np.int)])
-        self.proposal_indices = np.random.permutation(indices)
+            self.proposal_indices = np.concatenate([
+                np.arange(len(self.positive_proposals)),
+                np.arange(-len(self.negative_proposals), 0)])
 
     def load_frames(self, video_name, t0, t1):
         '''
@@ -97,15 +99,17 @@ class ProposalDataset(Dataset):
         return frames
 
     def __getitem__(self, idx):
-        proposal_index = self.proposal_indices[idx]
+        proposal_index = self.proposal_indices[0]
         if proposal_index >= 0:
             proposal = self.positive_proposals[proposal_index]
+        elif self.negative_fraction is None:
+            proposal = self.negative_proposals[proposal_index]
         else:
             proposal = random.choice(self.negative_proposals)
-        frames = self.load_frames(
-            proposal.video_name, proposal.t0, proposal.t1)
+        t0, t1, x0, y0, x1, y1 = proposal.localization.tolist()
+        frames = self.load_frames(proposal.video_name, int(t0), int(t1))
         clip = torch.as_tensor(frames[
-            :, proposal.y0:proposal.y1, proposal.x0:proposal.x1])
+            :, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))])
         label = proposal.label
         if self.clip_transform is not None:
             clip = self.clip_transform(clip)
