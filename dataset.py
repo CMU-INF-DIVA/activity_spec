@@ -61,6 +61,7 @@ class ProposalDataset(Dataset):
     def load_proposals(self):
         self.positive_proposals = []
         self.negative_proposals = []
+        self.ignored_proposals = []
         for video_name, _, proposals, labels in progressbar(
                 self.video_dataset, 'Load proposals'):
             columns = proposals.columns
@@ -72,19 +73,22 @@ class ProposalDataset(Dataset):
                 proposal = Proposal(video_name, localization, label)
                 if label[0] > 0:
                     self.negative_proposals.append(proposal)
-                else:
+                elif label[1:].sum() > 0:
                     self.positive_proposals.append(proposal)
-        if self.negative_fraction is None:
-            self.negative_quota = len(self.negative_proposals)
+                else:
+                    self.ignored_proposals.append(proposal)
+        negative_quota = len(self.negative_proposals)
+        if self.negative_fraction is not None:
+            negative_quota = int(round(
+                len(self.positive_proposals) * self.negative_fraction))
+        if negative_quota < len(self.negative_proposals):
             indices = np.concatenate([
-                np.arange(len(self.positive_proposals)),
-                np.full(self.negative_quota, -1, dtype=np.int)])
+                np.arange(1, len(self.positive_proposals) + 1),
+                np.zeros(negative_quota, dtype=np.int)])
             self.proposal_indices = np.random.permutation(indices)
         else:
-            self.negative_quota = int(round(
-                len(self.positive_proposals) * self.negative_fraction))
             self.proposal_indices = np.concatenate([
-                np.arange(len(self.positive_proposals)),
+                np.arange(1, len(self.positive_proposals) + 1),
                 np.arange(-len(self.negative_proposals), 0)])
 
     def load_frames(self, video_name, t0, t1):
@@ -105,9 +109,9 @@ class ProposalDataset(Dataset):
 
     def __getitem__(self, idx):
         proposal_index = self.proposal_indices[idx]
-        if proposal_index >= 0:
-            proposal = self.positive_proposals[proposal_index]
-        elif self.negative_fraction is None:
+        if proposal_index > 0:
+            proposal = self.positive_proposals[proposal_index - 1]
+        elif proposal_index < 0:
             proposal = self.negative_proposals[proposal_index]
         else:
             proposal = random.choice(self.negative_proposals)
@@ -123,4 +127,4 @@ class ProposalDataset(Dataset):
         return clip, label
 
     def __len__(self):
-        return len(self.positive_proposals) + self.negative_quota
+        return self.proposal_indices.shape[0]
