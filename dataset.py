@@ -6,7 +6,6 @@ import numpy as np
 import torch
 from avi_r import AVIReader
 from torch.utils.data import Dataset
-from pyturbo import progressbar
 
 from .base import ActivityTypes, ProposalType
 from .cube import CubeActivities
@@ -62,8 +61,7 @@ class ProposalDataset(Dataset):
         self.positive_proposals = []
         self.negative_proposals = []
         self.ignored_proposals = []
-        for video_name, _, proposals, labels in progressbar(
-                self.video_dataset, 'Load proposals'):
+        for video_name, _, proposals, labels in self.video_dataset:
             columns = proposals.columns
             if self.spatial_enlarge_rate is not None:
                 proposals = proposals.spatial_enlarge(
