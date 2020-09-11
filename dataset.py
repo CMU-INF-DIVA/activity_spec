@@ -1,9 +1,11 @@
 import json
+import os.path as osp
 import random
 from collections import namedtuple
 
 import numpy as np
 import torch
+from torchvision.io.video import read_video
 from avi_r import AVIReader
 from torch.utils.data import Dataset
 
@@ -38,18 +40,20 @@ class VideoDataset(Dataset):
         return len(self.file_index)
 
 
-Proposal = namedtuple('Proposal', ['video_name', 'localization', 'label'])
+Proposal = namedtuple('Proposal', [
+    'video_name', 'index', 'localization', 'label'])
 
 
 class ProposalDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
-                 dataset='MEVA', *, eval_mode=False, negative_fraction=None,
-                 spatial_enlarge_rate=None, stride=1, clip_transform=None,
-                 label_transform=None):
+                 clips_dir=None, dataset='MEVA', *, eval_mode=False,
+                 negative_fraction=None, spatial_enlarge_rate=None, stride=1,
+                 clip_transform=None, label_transform=None):
         self.video_dataset = VideoDataset(
             file_index_path, proposal_dir, label_dir, dataset)
         self.video_dir = video_dir
+        self.clips_dir = clips_dir
         self.eval_mode = eval_mode
         self.negative_fraction = negative_fraction
         self.spatial_enlarge_rate = spatial_enlarge_rate
@@ -103,6 +107,13 @@ class ProposalDataset(Dataset):
         '''
         Return frames as T x H x W x C[RGB] in [0, 256)
         '''
+        if self.clips_dir is not None:
+            clip_name = '%s.%d-%d_%d.mp4' % (
+                osp.splitext(video_name)[0], t0, t1, self.stride)
+            clip_path = osp.join(self.clips_dir, video_name, clip_name)
+            if osp.exists(clip_path):
+                frames = read_video(clip_path, pts_unit='sec')[0]
+                return frames
         video = AVIReader(video_name, self.video_dir)
         frames = []
         num_frames = (t1 - t0) // self.stride
@@ -111,7 +122,7 @@ class ProposalDataset(Dataset):
             frames.append(frame.numpy('rgb24'))
         if len(frames) < num_frames:
             frames.extend(frames[-1:] * (num_frames - len(frames)))
-        frames = np.stack(frames)
+        frames = torch.as_tensor(np.stack(frames))
         video.close()
         return frames
 
@@ -125,8 +136,7 @@ class ProposalDataset(Dataset):
             proposal = random.choice(self.negative_proposals)
         t0, t1, x0, y0, x1, y1 = proposal.localization.tolist()
         frames = self.load_frames(proposal.video_name, int(t0), int(t1))
-        clip = torch.as_tensor(frames[
-            :, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))])
+        clip = frames[:, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))]
         label = proposal.label
         if self.clip_transform is not None:
             clip = self.clip_transform(clip)
