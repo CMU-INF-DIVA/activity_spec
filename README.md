@@ -73,9 +73,13 @@ Generate a clip dataset based on proposals and labels. Number of negative sample
 
 ```python
 from activity_spec import ProposalDataset
-dataset = ProposalDataset(file_index_path, proposal_dir, label_dir,
-                          video_dir, negative_fraction=1.)
-clip, label = dataset[0]
+# Training: random sample negative proposals, drop ignored proposals
+train_set = ProposalDataset(file_index_path, proposal_dir, label_dir,
+                            video_dir, negative_fraction=1.)
+# Testing: use all proposals
+test_set = ProposalDataset(file_index_path, proposal_dir, label_dir,
+                           video_dir, eval_mode=True)
+clip, label = train_set[0]
 ```
 
 See details at [dataset.py](dataset.py).
