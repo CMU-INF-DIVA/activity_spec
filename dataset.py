@@ -44,12 +44,13 @@ Proposal = namedtuple('Proposal', ['video_name', 'localization', 'label'])
 class ProposalDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
-                 dataset='MEVA', *, negative_fraction=None,
+                 dataset='MEVA', *, eval_mode=False, negative_fraction=None,
                  spatial_enlarge_rate=None, stride=1, clip_transform=None,
                  label_transform=None):
         self.video_dataset = VideoDataset(
             file_index_path, proposal_dir, label_dir, dataset)
         self.video_dir = video_dir
+        self.eval_mode = eval_mode
         self.negative_fraction = negative_fraction
         self.spatial_enlarge_rate = spatial_enlarge_rate
         self.stride = stride
@@ -66,9 +67,15 @@ class ProposalDataset(Dataset):
             if self.spatial_enlarge_rate is not None:
                 proposals = proposals.spatial_enlarge(
                     self.spatial_enlarge_rate)
-            localizations = proposals.cubes[:, columns.t0:columns.y1 + 1]
-            for localization, label in zip(localizations, labels.cubes):
-                proposal = Proposal(video_name, localization, label)
+            columns = [columns.t0, columns.t1, columns.x0, columns.y0,
+                       columns.x1, columns.y1]
+            localizations = proposals.cubes[:, columns]
+            for i, (localization, label) in enumerate(
+                    zip(localizations, labels.cubes)):
+                proposal = Proposal(video_name, i, localization, label)
+                if self.eval_mode:  # Use all proposals in eval mode
+                    self.positive_proposals.append(proposal)
+                    continue
                 if label[0] > 0:
                     self.negative_proposals.append(proposal)
                 elif label[1:].sum() > 0:
@@ -79,6 +86,9 @@ class ProposalDataset(Dataset):
         if self.negative_fraction is not None:
             negative_quota = int(round(
                 len(self.positive_proposals) * self.negative_fraction))
+        # idx > 0 --> positive_proposals[idx - 1]
+        # idx == 0 --> Random sample from negative_proposals
+        # idx < 0 --> negative_proposals[idx]
         if negative_quota < len(self.negative_proposals):
             indices = np.concatenate([
                 np.arange(1, len(self.positive_proposals) + 1),
