@@ -52,8 +52,8 @@ class ProposalDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
                  clips_dir=None, dataset='MEVA', *, eval_mode=False,
-                 negative_fraction=None, spatial_enlarge_rate=None, stride=1,
-                 clip_transform=None, label_transform=None):
+                 negative_fraction=None, spatial_enlarge_rate=None,
+                 frame_stride=1, clip_transform=None, label_transform=None):
         self.video_dataset = VideoDataset(
             file_index_path, proposal_dir, label_dir, dataset)
         self.video_dir = video_dir
@@ -61,7 +61,7 @@ class ProposalDataset(Dataset):
         self.eval_mode = eval_mode
         self.negative_fraction = negative_fraction
         self.spatial_enlarge_rate = spatial_enlarge_rate
-        self.stride = stride
+        self.frame_stride = frame_stride
         self.clip_transform = clip_transform
         self.label_transform = label_transform
         self.load_samples()
@@ -112,7 +112,7 @@ class ProposalDataset(Dataset):
         '''
         if self.clips_dir is not None:
             clip_name = '%s.%d-%d_%d.mp4' % (
-                osp.splitext(video_name)[0], t0, t1, self.stride)
+                osp.splitext(video_name)[0], t0, t1, self.frame_stride)
             clip_path = osp.join(self.clips_dir, video_name, clip_name)
             if osp.exists(clip_path):
                 video = VideoReader(clip_path)
@@ -123,9 +123,9 @@ class ProposalDataset(Dataset):
                     'Clip not found in clips_dir: %s' % (self.clips_dir))
         video = AVIReader(video_name, self.video_dir)
         frames = []
-        num_frames = (t1 - t0) // self.stride
+        num_frames = (t1 - t0) // self.frame_stride
         video.seek(t0)
-        for frame in video.get_iter(num_frames, self.stride):
+        for frame in video.get_iter(num_frames, self.frame_stride):
             frames.append(frame.numpy('rgb24'))
         if len(frames) < num_frames:
             frames.extend(frames[-1:] * (num_frames - len(frames)))
@@ -153,8 +153,6 @@ class ProposalDataset(Dataset):
             clip = self.clip_transform(clip)
         if self.label_transform is not None:
             label = self.label_transform(label)
-        if self.eval_mode:
-            return clip, label, idx
         return clip, label
 
     def __len__(self):
