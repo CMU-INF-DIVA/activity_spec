@@ -1,16 +1,20 @@
 import json
 import os.path as osp
 import random
+import warnings
 from collections import namedtuple
 
+import decord
 import numpy as np
 import torch
-from torchvision.io.video import read_video
+from decord import VideoReader
 from avi_r import AVIReader
 from torch.utils.data import Dataset
 
 from .base import ActivityTypes, ProposalType
-from .cube import CubeActivities
+from .cube import CubeActivities, CubeColumns
+
+decord.bridge.set_bridge('torch')
 
 
 class VideoDataset(Dataset):
@@ -40,8 +44,8 @@ class VideoDataset(Dataset):
         return len(self.file_index)
 
 
-Proposal = namedtuple('Proposal', [
-    'video_name', 'index', 'localization', 'label'])
+Sample = namedtuple('Sample', [
+    'video_name', 'index', 'proposal', 'label'])
 
 
 class ProposalDataset(Dataset):
@@ -60,48 +64,47 @@ class ProposalDataset(Dataset):
         self.stride = stride
         self.clip_transform = clip_transform
         self.label_transform = label_transform
-        self.load_proposals()
+        self.load_samples()
 
-    def load_proposals(self):
-        self.positive_proposals = []
-        self.negative_proposals = []
-        self.ignored_proposals = []
+    def load_samples(self):
+        self.proposals = []
+        self.all_samples = []
+        self.positive_samples = []
+        self.negative_samples = []
         for video_name, _, proposals, labels in self.video_dataset:
-            columns = proposals.columns
+            self.proposals.append(proposals)
             if self.spatial_enlarge_rate is not None:
                 proposals = proposals.spatial_enlarge(
                     self.spatial_enlarge_rate)
-            columns = [columns.t0, columns.t1, columns.x0, columns.y0,
-                       columns.x1, columns.y1]
-            localizations = proposals.cubes[:, columns]
-            for i, (localization, label) in enumerate(
-                    zip(localizations, labels.cubes)):
-                proposal = Proposal(video_name, i, localization, label)
-                if self.eval_mode:  # Use all proposals in eval mode
-                    self.positive_proposals.append(proposal)
+            columns = [proposals.columns[c.name] for c in CubeColumns]
+            for i, (proposal, label) in enumerate(
+                    zip(proposals.cubes[:, columns], labels.cubes)):
+                sample = Sample(video_name, i, proposal, label)
+                self.all_samples.append(sample)
+                if self.eval_mode:  # Use all samples in eval mode
                     continue
                 if label[0] > 0:
-                    self.negative_proposals.append(proposal)
+                    self.negative_samples.append(sample)
                 elif label[1:].sum() > 0:
-                    self.positive_proposals.append(proposal)
-                else:
-                    self.ignored_proposals.append(proposal)
-        negative_quota = len(self.negative_proposals)
+                    self.positive_samples.append(sample)
+        if self.eval_mode:
+            return
+        negative_quota = len(self.negative_samples)
         if self.negative_fraction is not None:
             negative_quota = int(round(
-                len(self.positive_proposals) * self.negative_fraction))
-        # idx > 0 --> positive_proposals[idx - 1]
-        # idx == 0 --> Random sample from negative_proposals
-        # idx < 0 --> negative_proposals[idx]
-        if negative_quota < len(self.negative_proposals):
+                len(self.positive_samples) * self.negative_fraction))
+        # idx > 0 --> positive_samples[idx - 1]
+        # idx == 0 --> Random sample from negative_samples
+        # idx < 0 --> negative_samples[idx]
+        if negative_quota < len(self.negative_samples):
             indices = np.concatenate([
-                np.arange(1, len(self.positive_proposals) + 1),
+                np.arange(1, len(self.positive_samples) + 1),
                 np.zeros(negative_quota, dtype=np.int)])
-            self.proposal_indices = np.random.permutation(indices)
+            self.sample_indices = np.random.permutation(indices)
         else:
-            self.proposal_indices = np.concatenate([
-                np.arange(1, len(self.positive_proposals) + 1),
-                np.arange(-len(self.negative_proposals), 0)])
+            self.sample_indices = np.concatenate([
+                np.arange(1, len(self.positive_samples) + 1),
+                np.arange(-len(self.negative_samples), 0)])
 
     def load_frames(self, video_name, t0, t1):
         '''
@@ -112,8 +115,12 @@ class ProposalDataset(Dataset):
                 osp.splitext(video_name)[0], t0, t1, self.stride)
             clip_path = osp.join(self.clips_dir, video_name, clip_name)
             if osp.exists(clip_path):
-                frames = read_video(clip_path, pts_unit='sec')[0]
+                video = VideoReader(clip_path)
+                frames = torch.stack([video[i] for i in range(len(video))])
                 return frames
+            else:
+                warnings.warn(
+                    'Clip not found in clips_dir: %s' % (self.clips_dir))
         video = AVIReader(video_name, self.video_dir)
         frames = []
         num_frames = (t1 - t0) // self.stride
@@ -127,22 +134,30 @@ class ProposalDataset(Dataset):
         return frames
 
     def __getitem__(self, idx):
-        proposal_index = self.proposal_indices[idx]
-        if proposal_index > 0:
-            proposal = self.positive_proposals[proposal_index - 1]
-        elif proposal_index < 0:
-            proposal = self.negative_proposals[proposal_index]
+        if self.eval_mode:
+            sample = self.all_samples[idx]
         else:
-            proposal = random.choice(self.negative_proposals)
-        t0, t1, x0, y0, x1, y1 = proposal.localization.tolist()
-        frames = self.load_frames(proposal.video_name, int(t0), int(t1))
+            sample_index = self.sample_indices[idx]
+            if sample_index > 0:
+                sample = self.positive_samples[sample_index - 1]
+            elif sample_index < 0:
+                sample = self.negative_samples[sample_index]
+            else:
+                sample = random.choice(self.negative_samples)
+        t0, t1, x0, y0, x1, y1 = sample.proposal[
+            CubeColumns.t0:CubeColumns.y1 + 1].tolist()
+        frames = self.load_frames(sample.video_name, int(t0), int(t1))
         clip = frames[:, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))]
-        label = proposal.label
+        label = sample.label
         if self.clip_transform is not None:
             clip = self.clip_transform(clip)
         if self.label_transform is not None:
             label = self.label_transform(label)
+        if self.eval_mode:
+            return clip, label, idx
         return clip, label
 
     def __len__(self):
-        return self.proposal_indices.shape[0]
+        if self.eval_mode:
+            return len(self.all_samples)
+        return self.sample_indices.shape[0]
