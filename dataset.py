@@ -7,8 +7,8 @@ from collections import namedtuple
 import decord
 import numpy as np
 import torch
-from decord import VideoReader
 from avi_r import AVIReader
+from decord import VideoReader, cpu, gpu
 from torch.utils.data import Dataset
 
 from .base import ActivityTypes, ProposalType
@@ -20,22 +20,23 @@ decord.bridge.set_bridge('torch')
 class VideoDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir=None,
-                 dataset='MEVA'):
+                 dataset='MEVA', proposal_columns=CubeColumns):
         self.file_index_path = file_index_path
         with open(file_index_path) as f:
             self.file_index = [*json.load(f).items()]
         self.proposal_dir = proposal_dir
         self.label_dir = label_dir
         self.dataset = dataset
+        self.proposal_columns = proposal_columns
         self.activity_types = ActivityTypes[dataset]
 
     def __getitem__(self, idx):
         video_name, video_meta = self.file_index[idx]
         proposals = CubeActivities.load(
-            video_name, self.proposal_dir, ProposalType)
+            video_name, self.proposal_dir, ProposalType, self.proposal_columns)
         if self.label_dir is not None:
             labels = CubeActivities.load(
-                video_name, self.label_dir, None)
+                video_name, self.label_dir, None, self.activity_types)
         else:
             labels = None
         return video_name, video_meta, proposals, labels
@@ -53,7 +54,8 @@ class ProposalDataset(Dataset):
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
                  clips_dir=None, dataset='MEVA', *, eval_mode=False,
                  negative_fraction=None, spatial_enlarge_rate=None,
-                 frame_stride=1, clip_transform=None, label_transform=None):
+                 frame_stride=1, clip_transform=None, label_transform=None,
+                 device=None):
         self.video_dataset = VideoDataset(
             file_index_path, proposal_dir, label_dir, dataset)
         self.video_dir = video_dir
@@ -65,6 +67,7 @@ class ProposalDataset(Dataset):
         self.clip_transform = clip_transform
         self.label_transform = label_transform
         self.load_samples()
+        self.device = device
 
     def load_samples(self):
         self.proposals = []
@@ -115,8 +118,12 @@ class ProposalDataset(Dataset):
                 osp.splitext(video_name)[0], t0, t1, self.frame_stride)
             clip_path = osp.join(self.clips_dir, video_name, clip_name)
             if osp.exists(clip_path):
-                video = VideoReader(clip_path)
-                frames = torch.stack([video[i] for i in range(len(video))])
+                decord_context = cpu(0)
+                if self.device is not None and self.device.type == 'cuda':
+                    decord_context = gpu(self.device.index)
+                video = VideoReader(clip_path, ctx=decord_context)
+                frames = video.get_batch(range(len(video)))
+                del video
                 return frames
             else:
                 warnings.warn(
@@ -147,7 +154,9 @@ class ProposalDataset(Dataset):
         t0, t1, x0, y0, x1, y1 = sample.proposal[
             CubeColumns.t0:CubeColumns.y1 + 1].tolist()
         frames = self.load_frames(sample.video_name, int(t0), int(t1))
-        clip = frames[:, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))]
+        clip_ = frames[:, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))]
+        clip = clip_.cpu()
+        del frames, clip_
         label = sample.label
         if self.clip_transform is not None:
             clip = self.clip_transform(clip)

@@ -83,7 +83,9 @@ class CubeActivities(object):
 
     @classmethod
     def load(cls, video_name: str, load_dir: str,
-             type_names: Union[None, EnumMeta], suffix: str = ''):
+             type_names: Union[None, EnumMeta],
+             columns: Union[None, EnumMeta] = None,
+             suffix: str = ''):
         '''
         Load from csv file in load_dir.
         '''
@@ -92,8 +94,9 @@ class CubeActivities(object):
         if 'type' in df and type_names is not None:
             df['type'] = df['type'].apply(lambda v: type_names[v].value)
         cubes = torch.as_tensor(df.values.astype(np.float32))
-        columns = IntEnum('loaded_columns', [
-            (c, i) for i, c in enumerate(df.columns)])
+        if columns is None:
+            columns = IntEnum('loaded_columns', [
+                (c, i) for i, c in enumerate(df.columns)])
         obj = cls(cubes, video_name, type_names, columns)
         return obj
 
