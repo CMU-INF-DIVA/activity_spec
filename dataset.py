@@ -60,6 +60,7 @@ class ProposalDataset(Dataset):
             file_index_path, proposal_dir, label_dir, dataset)
         self.video_dir = video_dir
         self.clips_dir = clips_dir
+        self.dataset = dataset
         self.eval_mode = eval_mode
         self.negative_fraction = negative_fraction
         self.spatial_enlarge_rate = spatial_enlarge_rate
@@ -128,16 +129,22 @@ class ProposalDataset(Dataset):
             else:
                 warnings.warn(
                     'Clip not found in clips_dir: %s' % (self.clips_dir))
-        video = AVIReader(video_name, self.video_dir)
-        frames = []
-        num_frames = (t1 - t0) // self.frame_stride
-        video.seek(t0)
-        for frame in video.get_iter(num_frames, self.frame_stride):
-            frames.append(frame.numpy('rgb24'))
-        if len(frames) < num_frames:
-            frames.extend(frames[-1:] * (num_frames - len(frames)))
-        frames = torch.as_tensor(np.stack(frames))
-        video.close()
+        if self.dataset == 'MEVA':
+            video = AVIReader(video_name, self.video_dir)
+            frames = []
+            num_frames = (t1 - t0) // self.frame_stride
+            video.seek(t0)
+            for frame in video.get_iter(num_frames, self.frame_stride):
+                frames.append(frame.numpy('rgb24'))
+            if len(frames) < num_frames:
+                frames.extend(frames[-1:] * (num_frames - len(frames)))
+            frames = torch.as_tensor(np.stack(frames))
+            video.close()
+        else:
+            video = VideoReader(osp.join(self.video_dir, video_name))
+            frame_ids = np.arange(t0, t1, self.frame_stride)
+            frames = video.get_batch(frame_ids)
+            del video
         return frames
 
     def __getitem__(self, idx):
