@@ -19,6 +19,9 @@ Job = namedtuple('Job', [
     'file_index_path', 'activity_index_dir',
     'file_list', 'reference_activities', 'prediction_activities',
     'max_activity_length'])
+METRIC_KEYS = {
+    'SDL': ['nAUDC@0.2tfa', 'p_miss@0.04tfa'],
+    'TRECVID': ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']}
 
 logger = get_logger(NAME.split('.')[-1])
 
@@ -148,14 +151,9 @@ def main(args):
     metrics_mean = metrics.mean(axis=1).to_frame()
     metrics_mean.columns = ['mean']
     metrics_mean.to_csv(osp.join(args.evaluation_dir, 'metrics.csv'))
-    if args.target == 'SDL':
-        keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa']
-    elif args.target == 'TRECVID':
-        keys = ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']
-    else:
-        raise NotImplementedError(args.target)
     logger.info('Metrics: \n\t%s', '\n\t'.join(['%s = %.4f' % (
-        key, metrics_mean.loc[key, 'mean']) for key in keys]))
+        key, metrics_mean.loc[key, 'mean'])
+        for key in METRIC_KEYS[args.target]]))
     return metrics_mean
 
 
