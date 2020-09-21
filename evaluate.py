@@ -65,7 +65,8 @@ def activity_worker(job):
         json.dump(prediction, f, indent=4)
     cmd = f'python {SCORER} {job.protocol} -a {activity_index_path} ' \
         f'-f {job.file_index_path} -r {reference_path} -s {prediction_path} ' \
-        f'-o {evaluation_dir} -v -n {os.cpu_count()}'
+        f'-o {evaluation_dir} --det-point-resolution 1024 -v ' \
+        f'-n {os.cpu_count()} '
     process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
     try:
