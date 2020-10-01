@@ -14,8 +14,6 @@ from torch.utils.data import Dataset
 from .base import ActivityTypes, ProposalType
 from .cube import CubeActivities, CubeColumns
 
-decord.bridge.set_bridge('torch')
-
 
 class VideoDataset(Dataset):
 
@@ -122,9 +120,10 @@ class ProposalDataset(Dataset):
                 decord_context = cpu(0)
                 if self.device is not None and self.device.type == 'cuda':
                     decord_context = gpu(self.device.index)
-                video = VideoReader(clip_path, ctx=decord_context)
-                frames = video.get_batch(range(len(video)))
-                del video
+                with decord.bridge.use_torch():
+                    video = VideoReader(clip_path, ctx=decord_context)
+                    frames = video.get_batch(range(len(video)))
+                    del video
                 return frames
             else:
                 warnings.warn(
@@ -141,10 +140,11 @@ class ProposalDataset(Dataset):
             frames = torch.as_tensor(np.stack(frames))
             video.close()
         else:
-            video = VideoReader(osp.join(self.video_dir, video_name))
-            frame_ids = np.arange(t0, t1, self.frame_stride)
-            frames = video.get_batch(frame_ids)
-            del video
+            with decord.bridge.use_torch():
+                video = VideoReader(osp.join(self.video_dir, video_name))
+                frame_ids = np.arange(t0, t1, self.frame_stride)
+                frames = video.get_batch(frame_ids)
+                del video
         return frames
 
     def __getitem__(self, idx):
