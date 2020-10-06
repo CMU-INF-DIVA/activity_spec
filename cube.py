@@ -61,14 +61,24 @@ class CubeActivities(object):
         '''
         activities = []
         for cube in self.cubes:
+            obj_id = cube[self.columns.id].type(torch.int).item()
             activity_type = self.type_names(
                 int(round(cube[self.columns.type].item()))).name
             score = cube[self.columns.score].item()
-            t0 = int(cube[self.columns.t0].item())
-            t1 = int(cube[self.columns.t1].item())
+            t0, t1 = cube[[self.columns.t0, self.columns.t1]].type(
+                torch.int).tolist()
+            x0, y0 = cube[[self.columns.x0, self.columns.y0]].type(
+                torch.int).tolist()
+            x1, y1 = cube[[self.columns.x1, self.columns.y1]].ceil().type(
+                torch.int).tolist()
+            bbox = {'boundingBox': {
+                'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0}}
             activity = {
                 'activity': activity_type, 'presenceConf': score,
-                'localization': {self.video_name: {str(t0): 1, str(t1): 0}}}
+                'localization': {self.video_name: {str(t0): 1, str(t1): 0}},
+                'objects': [
+                    {'objectType': 'Any', 'objectID': obj_id, 'localization': {
+                        self.video_name: {str(t0): bbox, str(t1): {}}}}]}
             activities.append(activity)
         return activities
 
