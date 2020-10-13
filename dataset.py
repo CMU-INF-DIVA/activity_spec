@@ -36,7 +36,9 @@ class VideoDataset(Dataset):
             labels = CubeActivities.load(
                 video_name, self.label_dir, None, self.activity_types)
         else:
-            labels = None
+            labels = CubeActivities(
+                torch.full((len(proposals), len(self.activity_types)), -1.), 
+                video_name, None, self.activity_types)
         return video_name, video_meta, proposals, labels
 
     def __len__(self):
@@ -54,6 +56,7 @@ class ProposalDataset(Dataset):
                  negative_fraction=None, spatial_enlarge_rate=None,
                  frame_stride=1, clip_transform=None, label_transform=None,
                  device=None):
+        assert label_dir is not None or eval_mode
         self.video_dataset = VideoDataset(
             file_index_path, proposal_dir, label_dir, dataset)
         self.video_dir = video_dir
