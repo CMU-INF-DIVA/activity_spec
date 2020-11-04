@@ -116,18 +116,22 @@ class ProposalDataset(Dataset):
         Return frames as T x H x W x C[RGB] in [0, 256)
         '''
         if self.clips_dir is not None:
-            clip_name = '%s.%d-%d_%d.mp4' % (
-                osp.splitext(video_name)[0], t0, t1, self.frame_stride)
-            clip_path = osp.join(self.clips_dir, video_name, clip_name)
-            if osp.exists(clip_path):
-                decord_context = cpu(0)
-                if self.device is not None and self.device.type == 'cuda':
-                    decord_context = gpu(self.device.index)
-                with decord.bridge.use_torch():
-                    video = VideoReader(clip_path, ctx=decord_context)
-                    frames = video.get_batch(range(len(video)))
-                    del video
-                return frames
+            frame_stride = self.frame_stride
+            while frame_stride >= 1:
+                clip_name = '%s.%d-%d_%d.mp4' % (
+                    osp.splitext(video_name)[0], t0, t1, frame_stride)
+                clip_path = osp.join(self.clips_dir, video_name, clip_name)
+                if osp.exists(clip_path):
+                    decord_context = cpu(0)
+                    if self.device is not None and self.device.type == 'cuda':
+                        decord_context = gpu(self.device.index)
+                    with decord.bridge.use_torch():
+                        video = VideoReader(clip_path, ctx=decord_context)
+                        frames = video.get_batch(range(len(video)))
+                        del video
+                    frames = frames[::self.frame_stride // frame_stride]
+                    return frames
+                frame_stride //= 2
             else:
                 warnings.warn(
                     'Clip not found in clips_dir: %s' % (self.clips_dir))
