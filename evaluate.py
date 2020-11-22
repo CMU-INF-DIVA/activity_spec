@@ -136,23 +136,21 @@ def main(args):
     prediction_by_type = group_activities_by_type(prediction['activities'])
     logger.info('Evaluating')
     jobs = []
-    if args.save_all:
-        evaluation_dir = args.evaluation_dir
-    else:
-        tmp_dir = tempfile.TemporaryDirectory()
-        evaluation_dir = tmp_dir.name
-    for activity_type in reference_by_type.keys():
-        job = Job(
-            activity_type, evaluation_dir, args.protocol,
-            file_index_path, activity_index_dir, file_list,
-            reference_by_type[activity_type],
-            prediction_by_type[activity_type],
-            max_activity_length)
-        jobs.append(job)
-    with Pool(args.num_process) as pool:
-        metrics = [*progressbar(
-            pool.imap_unordered(activity_worker, jobs),
-            'Evaluation by type', total=len(jobs), silent=args.silent)]
+    with tempfile.TemporaryDirectory() as evaluation_dir:
+        if args.save_all:
+            evaluation_dir = args.evaluation_dir
+        for activity_type in reference_by_type.keys():
+            job = Job(
+                activity_type, evaluation_dir, args.protocol,
+                file_index_path, activity_index_dir, file_list,
+                reference_by_type[activity_type],
+                prediction_by_type[activity_type],
+                max_activity_length)
+            jobs.append(job)
+        with Pool(args.num_process) as pool:
+            metrics = [*progressbar(
+                pool.imap_unordered(activity_worker, jobs),
+                'Evaluation by type', total=len(jobs), silent=args.silent)]
     metrics = sorted(metrics, key=lambda x: x.columns[0])
     metrics = pd.concat(metrics, axis=1)
     metrics.to_csv(osp.join(args.evaluation_dir, 'metrics_by_activity.csv'))
