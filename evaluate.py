@@ -5,6 +5,8 @@ import logging
 import os
 import os.path as osp
 import subprocess
+import sys
+import tempfile
 from collections import defaultdict, namedtuple
 from multiprocessing.pool import Pool
 
@@ -63,10 +65,10 @@ def activity_worker(job):
     prediction_path = osp.join(evaluation_dir, 'prediction.json')
     with open(prediction_path, 'w') as f:
         json.dump(prediction, f, indent=4)
-    cmd = f'python {SCORER} {job.protocol} -a {activity_index_path} ' \
-        f'-f {job.file_index_path} -r {reference_path} -s {prediction_path} ' \
-        f'-o {evaluation_dir} --det-point-resolution 1024 -v ' \
-        f'-n {os.cpu_count()} '
+    cmd = f'{sys.executable} {SCORER} {job.protocol} ' \
+        f'-a {activity_index_path} -f {job.file_index_path} ' \
+        f'-r {reference_path} -s {prediction_path} -o {evaluation_dir}' \
+        f' --det-point-resolution 1024 -v -n {os.cpu_count()} '
     process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
     try:
@@ -134,9 +136,13 @@ def main(args):
     prediction_by_type = group_activities_by_type(prediction['activities'])
     logger.info('Evaluating')
     jobs = []
+    if args.save_all:
+        evaluation_dir = args.evaluation_dir
+    else:
+        evaluation_dir = tempfile.TemporaryDirectory()
     for activity_type in reference_by_type.keys():
         job = Job(
-            activity_type, args.evaluation_dir, args.protocol,
+            activity_type, evaluation_dir, args.protocol,
             file_index_path, activity_index_dir, file_list,
             reference_by_type[activity_type],
             prediction_by_type[activity_type],
@@ -179,6 +185,8 @@ def parse_args(argv=None):
     parser.add_argument(
         '--num_process', type=int, default=os.cpu_count(),
         help='Number of processes')
+    parser.add_argument(
+        '--save_all', action='store_true', help='Store intermediate results')
     args = parser.parse_args(argv)
     return args
 
