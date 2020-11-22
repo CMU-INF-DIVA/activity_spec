@@ -139,7 +139,8 @@ def main(args):
     if args.save_all:
         evaluation_dir = args.evaluation_dir
     else:
-        evaluation_dir = tempfile.TemporaryDirectory()
+        tmp_dir = tempfile.TemporaryDirectory()
+        evaluation_dir = tmp_dir.name
     for activity_type in reference_by_type.keys():
         job = Job(
             activity_type, evaluation_dir, args.protocol,
