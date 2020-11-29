@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import os.path as osp
+import signal
 import subprocess
 import sys
 import tempfile
@@ -39,6 +40,7 @@ def group_activities_by_type(activities):
 
 
 def activity_worker(job):
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
     evaluation_dir = osp.join(job.evaluation_dir, job.activity_type)
     os.makedirs(evaluation_dir, exist_ok=True)
     activity_index_path = osp.join(
@@ -69,12 +71,11 @@ def activity_worker(job):
         f'-a {activity_index_path} -f {job.file_index_path} ' \
         f'-r {reference_path} -s {prediction_path} -o {evaluation_dir}' \
         f' --det-point-resolution 1024 -v -n {os.cpu_count()} '
-    process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT)
     try:
-        process.check_returncode()
-    except Exception as e:
-        print(process.stdout.decode('utf-8'))
+        subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, check=True)
+    except subprocess.CalledProcessError as e:
+        print('\n' + e.stdout.decode('utf-8'))
         raise e
     metrics = pd.read_csv(
         osp.join(evaluation_dir, 'scores_by_activity.csv'), '|')
