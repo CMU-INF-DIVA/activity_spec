@@ -39,8 +39,11 @@ def group_activities_by_type(activities):
     return activities_by_type
 
 
-def activity_worker(job):
+def worker_initializer():
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
+
+def activity_worker(job):
     evaluation_dir = osp.join(job.evaluation_dir, job.activity_type)
     os.makedirs(evaluation_dir, exist_ok=True)
     activity_index_path = osp.join(
@@ -148,7 +151,7 @@ def main(args):
                 prediction_by_type[activity_type],
                 max_activity_length)
             jobs.append(job)
-        with Pool(args.num_process) as pool:
+        with Pool(args.num_process, worker_initializer) as pool:
             metrics = [*progressbar(
                 pool.imap_unordered(activity_worker, jobs),
                 'Evaluation by type', total=len(jobs), silent=args.silent)]
