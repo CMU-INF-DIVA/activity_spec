@@ -74,8 +74,7 @@ def activity_worker(job):
     cmd = f'{sys.executable} {SCORER} {job.protocol} ' \
         f'-a {activity_index_path} -f {job.file_index_path} ' \
         f'-r {reference_path} -s {prediction_path} -o {evaluation_dir} ' \
-        f'--det-point-resolution 1024 -v ' \
-        f'-n {len(psutil.Process().cpu_affinity())} '
+        f'--det-point-resolution 1024 -v'
     try:
         subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
                        stderr=subprocess.STDOUT, check=True)
