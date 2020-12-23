@@ -12,6 +12,7 @@ from collections import defaultdict, namedtuple
 from multiprocessing.pool import Pool
 
 import pandas as pd
+import psutil
 from pyturbo import get_logger, progressbar
 
 SCORER = osp.join(osp.dirname(__file__), 'scorer/ActEV_Scorer.py')
@@ -72,11 +73,12 @@ def activity_worker(job):
         json.dump(prediction, f, indent=4)
     cmd = f'{sys.executable} {SCORER} {job.protocol} ' \
         f'-a {activity_index_path} -f {job.file_index_path} ' \
-        f'-r {reference_path} -s {prediction_path} -o {evaluation_dir}' \
-        f' --det-point-resolution 1024 -v -n {os.cpu_count()} '
+        f'-r {reference_path} -s {prediction_path} -o {evaluation_dir} ' \
+        f'--det-point-resolution 1024 -v ' \
+        f'-n {len(psutil.Process().cpu_affinity())} '
     try:
         subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT, check=True)
+                       stderr=subprocess.STDOUT, check=True)
     except subprocess.CalledProcessError as e:
         print('\n' + e.stdout.decode('utf-8'))
         raise e
@@ -186,7 +188,8 @@ def parse_args(argv=None):
         help='Time-based false alarm threshold to filter redundant instances')
     parser.add_argument('--silent', action='store_true', help='Silent logs')
     parser.add_argument(
-        '--num_process', type=int, default=os.cpu_count(),
+        '--num_process', type=int,
+        default=len(psutil.Process().cpu_affinity()),
         help='Number of processes')
     parser.add_argument(
         '--save_all', action='store_true', help='Store intermediate results')

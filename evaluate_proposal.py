@@ -7,15 +7,16 @@ from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pandas as pd
+import psutil
 import torch
 from pyturbo import get_logger, progressbar
 from torchvision.ops.boxes import box_area, box_iou
 
 from .base import ActivityTypes, ProposalType
-from .reference import Reference
 from .cube import CubeActivities
-from .evaluate import main as evaluate_main, parse_args as evaluate_args
-
+from .evaluate import main as evaluate_main
+from .evaluate import parse_args as evaluate_args
+from .reference import Reference
 
 NAME = '%s.%s' % (__package__, osp.splitext(osp.basename(__file__))[0])
 MODES = ['IoU', 'RefCover']
@@ -81,7 +82,7 @@ def threshold_worker(job):
         job.evaluation_dir, 'eval_%s_%.1f' % (job.mode, job.threshold))
     argv = [job.dataset_dir, job.subset, labeled_prop_path,
             evaluation_dir, '--silent',
-            '--num_process', str(os.cpu_count() // 5)]
+            '--num_process', str(len(psutil.Process().cpu_affinity()) // 5)]
     current_metric = evaluate_main(evaluate_args(argv))
     current_metric.columns = ['%s_%.1f' % (job.mode, job.threshold)]
     return current_metric
@@ -148,7 +149,7 @@ def main(args, assigner):
             job = Job(labeled_prop, mode, threshold,
                       args.subset, dataset_dir, args.evaluation_dir)
             jobs.append(job)
-    with ProcessPoolExecutor() as pool:
+    with ProcessPoolExecutor(len(psutil.Process().cpu_affinity())) as pool:
         metrics = [*progressbar(
             pool.map(threshold_worker, reversed(jobs)),
             'Jobs', total=len(jobs))]
