@@ -12,6 +12,7 @@ import torch
 from pyturbo import get_logger, progressbar
 from torchvision.ops.boxes import box_area, box_iou
 
+from .assigner import ActivityAssigner
 from .base import ActivityTypes, ProposalType
 from .cube import CubeActivities
 from .evaluate import main as evaluate_main
@@ -28,20 +29,6 @@ Job = namedtuple('Job', [
 
 
 logger = get_logger(NAME)
-
-
-def default_assigner(cube_acts_prop, wrapped_label_weights):
-    prop_indices, predictions = torch.nonzero(
-        wrapped_label_weights.cubes > 0, as_tuple=True)
-    valid = predictions > 0
-    prop_indices, predictions = prop_indices[valid], predictions[valid]
-    cubes = cube_acts_prop.cubes[prop_indices]
-    cubes[:, cube_acts_prop.columns.type] = predictions
-    cubes[:, cube_acts_prop.columns.score] = wrapped_label_weights.cubes[
-        prop_indices, predictions]
-    cube_acts = cube_acts_prop.duplicate_with(
-        cubes, type_names=wrapped_label_weights.columns)
-    return cube_acts
 
 
 def get_spatial_scores(cube_acts_ref, cube_acts_prop):
@@ -88,7 +75,7 @@ def threshold_worker(job):
     return current_metric
 
 
-def main(args, assigner):
+def main(args, filter=None):
     logger.info('Running with args: \n\t%s', '\n\t'.join([
                 '%s = %s' % (k, v) for k, v in vars(args).items()]))
     dataset_dir = osp.join(args.datasets_dir, args.dataset)
@@ -99,6 +86,7 @@ def main(args, assigner):
     os.makedirs(args.evaluation_dir, exist_ok=True)
     logger.info('Loading proposals: %s', args.proposal_dir)
     logger.info('Loading labels: %s', args.label_dir)
+    assigner = ActivityAssigner()
     all_activities = []
     pos_count, ref_count, det_count = 0, 0, 0
     num_labels = []
@@ -110,6 +98,8 @@ def main(args, assigner):
         wrapped_label_weights = CubeActivities.load(
             video, args.label_dir, None)
         cube_acts_labeled = assigner(cube_acts_prop, wrapped_label_weights)
+        if filter is not None:
+            cube_acts_labeled = filter(cube_acts_labeled)
         if args.enlarge_rate is not None:
             cube_acts_prop = cube_acts_prop.spatial_enlarge(
                 args.enlarge_rate, args.frame_size)
@@ -201,4 +191,4 @@ def parse_args(argv=None):
 
 
 if __name__ == "__main__":
-    main(parse_args(), default_assigner)
+    main(parse_args())
