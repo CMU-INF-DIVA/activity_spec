@@ -15,6 +15,7 @@ from torchvision.ops.boxes import box_area, box_iou
 from .assigner import ActivityAssigner
 from .base import ActivityTypes, ProposalType
 from .cube import CubeActivities
+from .evaluate import METRIC_KEYS
 from .evaluate import main as evaluate_main
 from .evaluate import parse_args as evaluate_args
 from .reference import Reference
@@ -24,7 +25,7 @@ MODES = ['IoU', 'RefCover']
 THRESHOLDS = np.arange(0, 1, 0.1)
 
 Job = namedtuple('Job', [
-    'reference', 'mode', 'threshold', 'subset', 'dataset_dir',
+    'reference', 'mode', 'threshold', 'subset', 'target', 'dataset_dir',
     'evaluation_dir'])
 
 
@@ -68,7 +69,7 @@ def threshold_worker(job):
     evaluation_dir = osp.join(
         job.evaluation_dir, 'eval_%s_%.1f' % (job.mode, job.threshold))
     argv = [job.dataset_dir, job.subset, labeled_prop_path,
-            evaluation_dir, '--silent',
+            evaluation_dir, '--target', job.target, '--silent',
             '--num_process', str(len(psutil.Process().cpu_affinity()) // 5)]
     current_metric = evaluate_main(evaluate_args(argv))
     current_metric.columns = ['%s_%.1f' % (job.mode, job.threshold)]
@@ -135,8 +136,8 @@ def main(args, assigner=None):
     jobs = []
     for threshold in THRESHOLDS:
         for mode in MODES:
-            job = Job(labeled_prop, mode, threshold,
-                      args.subset, dataset_dir, args.evaluation_dir)
+            job = Job(labeled_prop, mode, threshold, args.subset, args.target,
+                      dataset_dir, args.evaluation_dir)
             jobs.append(job)
     with ProcessPoolExecutor(len(psutil.Process().cpu_affinity())) as pool:
         metrics = [*progressbar(
@@ -144,7 +145,7 @@ def main(args, assigner=None):
             'Jobs', total=len(jobs))]
     metrics = pd.concat(metrics, axis=1)
     pd.set_option('max_columns', None)
-    print_keys = ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'w_p_miss@0.04tfa']
+    print_keys = METRIC_KEYS[args.target]
     all_columns = []
     for mode in MODES:
         columns = ['%s_%.1f' % (mode, thres) for thres in THRESHOLDS]
@@ -182,6 +183,9 @@ def parse_args(argv=None):
     parser.add_argument(
         '--frame_size', default=[1920, 1080], type=int, nargs=2,
         help='Image size (width, height) of a frame, (default: [1920, 1080])')
+    parser.add_argument(
+        '--target', default='SDL', choices=METRIC_KEYS.keys(),
+        help='Evaluation target, only affects the metrics to be printed')
     parser.add_argument(
         '--datasets_dir', help='Directory of datasets (actev-datasets repo)',
         default=osp.join(osp.dirname(__file__), '../../datasets'))

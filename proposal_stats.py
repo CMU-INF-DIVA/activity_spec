@@ -5,6 +5,8 @@ import os.path as osp
 import pandas as pd
 from pyturbo import get_logger
 
+from .evaluate import METRIC_KEYS
+
 NAME = '%s.%s' % (__package__, osp.splitext(osp.basename(__file__))[0])
 
 logger = get_logger(NAME)
@@ -34,8 +36,7 @@ def main(args):
            '%(#label <= 3)': stats['label_rates']['1'] +
            stats['label_rates']['2'] + stats['label_rates']['3']}
     stats_df = pd.DataFrame([row], index=[args.subset_type])
-    metrics = ['nAUDC@0.2tfa', 'p_miss@0.04tfa']
-    metrics_df = df.loc[metrics]
+    metrics_df = df.loc[METRIC_KEYS[args.target]]
     sub_dfs = []
     for mode in ['IoU', 'RefCover']:
         columns = ['%s_avg' % (mode)] + [
@@ -57,6 +58,9 @@ def parse_args(argv=None):
         'proposal_evaluation_dir',
         help='Directory containing proposal evaluation results')
     parser.add_argument('subset_type', choices=['train', 'test', 'all'])
+    parser.add_argument(
+        '--target', default='SDL', choices=METRIC_KEYS.keys(),
+        help='Evaluation target, only affects the metrics to be printed')
     args = parser.parse_args(argv)
     return args
 

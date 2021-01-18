@@ -24,7 +24,7 @@ Job = namedtuple('Job', [
     'file_list', 'reference_activities', 'prediction_activities',
     'max_activity_length'])
 METRIC_KEYS = {
-    'SDL': ['nAUDC@0.2tfa', 'p_miss@0.04tfa'],
+    'SDL': ['nAUDC@0.2tfa', 'p_miss@0.02tfa'],
     'TRECVID': ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']}
 
 logger = get_logger(NAME.split('.')[-1])
@@ -180,7 +180,7 @@ def parse_args(argv=None):
     parser.add_argument(
         '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
     parser.add_argument(
-        '--target', default='SDL', choices=['SDL', 'TRECVID'],
+        '--target', default='SDL', choices=METRIC_KEYS.keys(),
         help='Evaluation target, only affects the metrics to be printed')
     parser.add_argument(
         '--tfa_threshold', type=float, default=0.4,
