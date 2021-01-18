@@ -75,7 +75,7 @@ def threshold_worker(job):
     return current_metric
 
 
-def main(args, filter=None):
+def main(args, assigner=None):
     logger.info('Running with args: \n\t%s', '\n\t'.join([
                 '%s = %s' % (k, v) for k, v in vars(args).items()]))
     dataset_dir = osp.join(args.datasets_dir, args.dataset)
@@ -86,7 +86,8 @@ def main(args, filter=None):
     os.makedirs(args.evaluation_dir, exist_ok=True)
     logger.info('Loading proposals: %s', args.proposal_dir)
     logger.info('Loading labels: %s', args.label_dir)
-    assigner = ActivityAssigner()
+    if assigner is None:
+        assigner = ActivityAssigner()
     all_activities = []
     pos_count, ref_count, det_count = 0, 0, 0
     num_labels = []
@@ -98,8 +99,6 @@ def main(args, filter=None):
         wrapped_label_weights = CubeActivities.load(
             video, args.label_dir, None)
         cube_acts_labeled = assigner(cube_acts_prop, wrapped_label_weights)
-        if filter is not None:
-            cube_acts_labeled = filter(cube_acts_labeled)
         if args.enlarge_rate is not None:
             cube_acts_prop = cube_acts_prop.spatial_enlarge(
                 args.enlarge_rate, args.frame_size)
