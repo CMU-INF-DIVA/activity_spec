@@ -124,7 +124,10 @@ def main(args):
         total_prediction_length += length
     prediction_types = len(set([act['activity']
                                 for act in prediction['activities']]))
-    average_prediction_length = total_prediction_length // prediction_types
+    if prediction_types > 0:
+        average_prediction_length = total_prediction_length // prediction_types
+    else:
+        average_prediction_length = 0
     prediction_tfa = average_prediction_length / video_length
     logger.info('Prediction length: %d frames of %d types',
                 total_prediction_length, prediction_types)
