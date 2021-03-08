@@ -26,7 +26,7 @@ THRESHOLDS = np.arange(0, 1, 0.1)
 
 Job = namedtuple('Job', [
     'reference', 'mode', 'threshold', 'subset', 'target', 'dataset_dir',
-    'evaluation_dir'])
+    'evaluation_dir', 'num_processes'])
 
 
 logger = get_logger(NAME)
@@ -70,7 +70,7 @@ def threshold_worker(job):
         job.evaluation_dir, 'eval_%s_%.1f' % (job.mode, job.threshold))
     argv = [job.dataset_dir, job.subset, labeled_prop_path,
             evaluation_dir, '--target', job.target, '--silent',
-            '--num_process', str(len(psutil.Process().cpu_affinity()) // 5)]
+            '--num_processes', str(job.num_processes)]
     current_metric = evaluate_main(evaluate_args(argv))
     current_metric.columns = ['%s_%.1f' % (job.mode, job.threshold)]
     return current_metric
@@ -133,13 +133,14 @@ def main(args, assigner=None):
         json.dump(stats, f, indent=4)
     logger.info('Statistics: \n%s', json.dumps(stats, indent=4))
     logger.info('Evaluating')
+    num_processes = len(psutil.Process().cpu_affinity()) // args.num_processes
     jobs = []
     for threshold in THRESHOLDS:
         for mode in MODES:
             job = Job(labeled_prop, mode, threshold, args.subset, args.target,
-                      dataset_dir, args.evaluation_dir)
+                      dataset_dir, args.evaluation_dir, num_processes)
             jobs.append(job)
-    with ProcessPoolExecutor(len(psutil.Process().cpu_affinity())) as pool:
+    with ProcessPoolExecutor(args.num_processes) as pool:
         metrics = [*progressbar(
             pool.map(threshold_worker, reversed(jobs)),
             'Jobs', total=len(jobs))]
@@ -189,6 +190,11 @@ def parse_args(argv=None):
     parser.add_argument(
         '--datasets_dir', help='Directory of datasets (actev-datasets repo)',
         default=osp.join(osp.dirname(__file__), '../../datasets'))
+    parser.add_argument(
+        '--num_processes', type=int,
+        default=min(len(psutil.Process().cpu_affinity()),
+                    len(MODES) * len(THRESHOLDS)),
+        help='Number of processes')
     args = parser.parse_args(argv)
     return args
 

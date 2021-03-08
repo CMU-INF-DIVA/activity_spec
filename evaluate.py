@@ -155,7 +155,7 @@ def main(args):
                 prediction_by_type[activity_type],
                 max_activity_length)
             jobs.append(job)
-        with Pool(args.num_process, worker_initializer) as pool:
+        with Pool(args.num_processes, worker_initializer) as pool:
             metrics = [*progressbar(
                 pool.imap_unordered(activity_worker, jobs),
                 'Evaluation by type', total=len(jobs), silent=args.silent)]
@@ -190,7 +190,7 @@ def parse_args(argv=None):
         help='Time-based false alarm threshold to filter redundant instances')
     parser.add_argument('--silent', action='store_true', help='Silent logs')
     parser.add_argument(
-        '--num_process', type=int,
+        '--num_processes', type=int,
         default=len(psutil.Process().cpu_affinity()),
         help='Number of processes')
     parser.add_argument(
