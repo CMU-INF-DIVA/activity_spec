@@ -1,3 +1,5 @@
+import os
+import os.path as osp
 from enum import IntEnum, auto
 
 
@@ -97,3 +99,18 @@ class ActivityTypeVIRAT(IntEnum):
 
 
 ActivityTypes = {'MEVA': ActivityTypeMEVA, 'VIRAT': ActivityTypeVIRAT}
+
+
+def load_activity_index(dataset):
+    activity_index_dir = osp.join(
+        os.environ['datasets_dir'], dataset, 'meta/activity-index/single')
+    name = 'ActivityType' + dataset
+    types = ['Negative'] + os.listdir(activity_index_dir)
+    enum = IntEnum(name, types, start=0)
+    globals()[name] = enum
+    return enum
+
+
+dataset = os.environ.get('dataset', None)
+if dataset is not None and dataset not in ActivityTypes:
+    ActivityTypes[dataset] = load_activity_index(dataset)
