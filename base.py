@@ -1,6 +1,10 @@
 from enum import IntEnum, auto
 
 
+PROP_TYPE_SCALE = 100
+PROP_TYPE_FRAC = 1 / PROP_TYPE_SCALE
+
+
 class ProposalType(IntEnum):
 
     Unknown = -1

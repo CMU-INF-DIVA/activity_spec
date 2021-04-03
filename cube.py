@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import torch
 
+from .base import PROP_TYPE_SCALE
+
 
 class CubeColumns(IntEnum):
 
@@ -54,16 +56,22 @@ class CubeActivities(object):
             df['type'] = df['type'].apply(lambda v: self.type_names(v).name)
         return df
 
-    def to_official(self):
+    def to_official(self, object_types=None):
         '''
         Official format in Json structure, 
         only contains temporal and type information.
         '''
         activities = []
         for cube in self.cubes:
-            obj_id = cube[self.columns.id].type(torch.int).item()
+            obj_id = cube[self.columns.id].item()
             activity_type = self.type_names(
                 int(round(cube[self.columns.type].item()))).name
+            if object_types is not None:
+                object_type = object_types(
+                    int(round(obj_id % 1 * PROP_TYPE_SCALE))).name
+            else:
+                object_type = 'Any'
+            obj_id = int(round(obj_id))
             score = cube[self.columns.score].item()
             t0, t1 = cube[[self.columns.t0, self.columns.t1]].type(
                 torch.int).tolist()
@@ -77,8 +85,9 @@ class CubeActivities(object):
                 'activity': activity_type, 'presenceConf': score,
                 'localization': {self.video_name: {str(t0): 1, str(t1): 0}},
                 'objects': [
-                    {'objectType': 'Any', 'objectID': obj_id, 'localization': {
-                        self.video_name: {str(t0): bbox, str(t1): {}}}}]}
+                    {'objectType': object_type, 'objectID': obj_id,
+                     'localization': {
+                         self.video_name: {str(t0): bbox, str(t1): {}}}}]}
             activities.append(activity)
         return activities
 

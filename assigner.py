@@ -1,5 +1,6 @@
 import torch
 
+from .base import PROP_TYPE_FRAC
 
 class ActivityAssigner(object):
 
@@ -12,6 +13,8 @@ class ActivityAssigner(object):
         valid = predictions > 0
         prop_indices, predictions = prop_indices[valid], predictions[valid]
         cubes = cube_acts_prop.cubes[prop_indices]
+        cubes[:, cube_acts_prop.columns.id] += cubes[
+            :, cube_acts_prop.columns.type] * PROP_TYPE_FRAC
         cubes[:, cube_acts_prop.columns.type] = predictions
         cubes[:, cube_acts_prop.columns.score] = wrapped_label_weights.cubes[
             prop_indices, predictions]
