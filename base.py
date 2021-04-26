@@ -105,7 +105,8 @@ def load_activity_index(dataset):
     activity_index_dir = osp.join(
         os.environ['datasets_dir'], dataset, 'meta/activity-index/single')
     name = 'ActivityType' + dataset
-    types = ['Negative'] + os.listdir(activity_index_dir)
+    types = ['Negative'] + [
+        osp.splitext(a)[0] for a in os.listdir(activity_index_dir)]
     enum = IntEnum(name, types, start=0)
     globals()[name] = enum
     return enum
