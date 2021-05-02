@@ -66,8 +66,13 @@ def activity_worker(job):
         selected_activities.append(act)
         if current_length > job.max_activity_length:
             break
-    prediction = {'filesProcessed': job.file_list,
-                  'activities': selected_activities}
+    status = {'status': 'success', 'message': ''}
+    prediction = {
+        'filesProcessed': job.file_list,
+        'processingReport': {
+            'siteSpecific': {},
+            'fileStatuses': {f: status for f in job.file_list}},
+        'activities': selected_activities}
     prediction_path = osp.join(evaluation_dir, 'prediction.json')
     with open(prediction_path, 'w') as f:
         json.dump(prediction, f, indent=4)
