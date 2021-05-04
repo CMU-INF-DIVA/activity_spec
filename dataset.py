@@ -53,9 +53,9 @@ class ProposalDataset(Dataset):
 
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
                  clips_dir=None, dataset='MEVA', *, eval_mode=False,
-                 negative_fraction=None, spatial_enlarge_rate=None,
-                 frame_stride=1, clip_transform=None, label_transform=None,
-                 device=None):
+                 negative_fraction=None, negative_whitelist=None,
+                 spatial_enlarge_rate=None, frame_stride=1, 
+                 clip_transform=None, label_transform=None, device=None):
         assert label_dir is not None or eval_mode
         self.video_dataset = VideoDataset(
             file_index_path, proposal_dir, label_dir, dataset)
@@ -64,6 +64,7 @@ class ProposalDataset(Dataset):
         self.dataset = dataset
         self.eval_mode = eval_mode
         self.negative_fraction = negative_fraction
+        self.negative_whitelist = negative_whitelist
         self.spatial_enlarge_rate = spatial_enlarge_rate
         self.frame_stride = frame_stride
         self.clip_transform = clip_transform
@@ -90,7 +91,9 @@ class ProposalDataset(Dataset):
                 if self.eval_mode:  # Use all samples in eval mode
                     continue
                 if label[0] > 0:
-                    self.negative_samples.append(sample)
+                    if self.negative_whitelist is None or \
+                            video_name in self.negative_whitelist:
+                        self.negative_samples.append(sample)
                 elif label[1:].sum() > 0:
                     self.positive_samples.append(sample)
         if self.eval_mode:
