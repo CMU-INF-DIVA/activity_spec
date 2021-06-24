@@ -9,11 +9,10 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict, namedtuple
-from multiprocessing.pool import Pool
 
 import pandas as pd
 import psutil
-from pyturbo import get_logger, progressbar
+from pyturbo import get_logger, process_map
 
 SCORER = osp.join(osp.dirname(__file__), 'scorer/ActEV_Scorer.py')
 NAME = '%s.%s' % (__package__, osp.splitext(osp.basename(__file__))[0])
@@ -44,16 +43,7 @@ def worker_initializer():
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 
-def activity_worker(job):
-    evaluation_dir = osp.join(job.evaluation_dir, job.activity_type)
-    os.makedirs(evaluation_dir, exist_ok=True)
-    activity_index_path = osp.join(
-        job.activity_index_dir, '%s.json' % (job.activity_type))
-    reference = {'filesProcessed': job.file_list,
-                 'activities': job.reference_activities}
-    reference_path = osp.join(evaluation_dir, 'reference.json')
-    with open(reference_path, 'w') as f:
-        json.dump(reference, f, indent=4)
+def get_prediction(job):
     selected_activities = []
     sorted_activities = sorted(
         job.prediction_activities, key=lambda a: a['presenceConf'],
@@ -73,6 +63,20 @@ def activity_worker(job):
             'siteSpecific': {},
             'fileStatuses': {f: status for f in job.file_list}},
         'activities': selected_activities}
+    return prediction
+
+
+def activity_worker(job):
+    evaluation_dir = osp.join(job.evaluation_dir, job.activity_type)
+    os.makedirs(evaluation_dir, exist_ok=True)
+    activity_index_path = osp.join(
+        job.activity_index_dir, '%s.json' % (job.activity_type))
+    reference = {'filesProcessed': job.file_list,
+                 'activities': job.reference_activities}
+    reference_path = osp.join(evaluation_dir, 'reference.json')
+    with open(reference_path, 'w') as f:
+        json.dump(reference, f, indent=4)
+    prediction = get_prediction(job)
     prediction_path = osp.join(evaluation_dir, 'prediction.json')
     with open(prediction_path, 'w') as f:
         json.dump(prediction, f, indent=4)
@@ -80,6 +84,8 @@ def activity_worker(job):
         f'-a {activity_index_path} -f {job.file_index_path} ' \
         f'-r {reference_path} -s {prediction_path} -o {evaluation_dir} ' \
         f'--det-point-resolution 1024 -v'
+    columns = [job.activity_type]
+    del reference, prediction, job
     try:
         subprocess.run(cmd, shell=True, stdout=subprocess.PIPE,
                        stderr=subprocess.STDOUT, check=True)
@@ -92,7 +98,7 @@ def activity_worker(job):
     metrics = metrics.set_index('metric_name')
     metrics['metric_value'] = metrics['metric_value'].apply(
         lambda x: x if x != 'None' else 0).astype(float)
-    metrics.columns = [job.activity_type]
+    metrics.columns = columns
     return metrics
 
 
@@ -160,10 +166,9 @@ def main(args):
                 prediction_by_type[activity_type],
                 max_activity_length)
             jobs.append(job)
-        with Pool(args.num_processes, worker_initializer) as pool:
-            metrics = [*progressbar(
-                pool.imap_unordered(activity_worker, jobs),
-                'Evaluation by type', total=len(jobs), silent=args.silent)]
+        metrics = [*process_map(
+            activity_worker, jobs, args.num_processes, 
+            desc='Evaluation by type', silent=args.silent)]
     metrics = sorted(metrics, key=lambda x: x.columns[0])
     metrics = pd.concat(metrics, axis=1)
     metrics.to_csv(osp.join(args.evaluation_dir, 'metrics_by_activity.csv'))
