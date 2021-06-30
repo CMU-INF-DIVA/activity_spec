@@ -105,7 +105,7 @@ ActivityTypes = {'MEVA': ActivityTypeMEVA, 'VIRAT': ActivityTypeVIRAT}
 
 def get_camera_id(video_name, dataset):
     if dataset == 'MEVA':
-        return video_name[-8:-4]
+        return '.'.join(video_name.split('.')[-3:-1])
     elif dataset == 'VIRAT':
         return video_name[8:14]
     raise NotImplementedError(dataset)
