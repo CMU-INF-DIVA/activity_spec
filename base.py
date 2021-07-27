@@ -13,6 +13,7 @@ class ProposalType(IntEnum):
     Vehicle = 1
     Person = auto()
     Bike = auto()
+    TrafficLight = auto()
 
     VehiclePerson = 11
     PersonPerson = auto()
