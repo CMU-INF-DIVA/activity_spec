@@ -44,7 +44,7 @@ class Reference(object):
         quantized_activities = []
         for act_id, activity in enumerate(raw_activities):
             activity_type = self.type_names[activity['activity']]
-            start_end = {v: int(k) for k, v in activity['localization'][
+            start_end = {v: int(k) - 1 for k, v in activity['localization'][
                 video_name].items()}
             activity_start, activity_end = start_end[1], start_end[0]
             first_cube_idx = int(max(0, np.ceil(
@@ -52,7 +52,7 @@ class Reference(object):
             last_cube_idx = int(np.floor((activity_end - 1) / stride))
             cube_starts = np.arange(
                 first_cube_idx, last_cube_idx + 1) * stride
-            cube_ends = cube_starts + duration
+            cube_ends = np.minimum(cube_starts + duration, activity_end)
             activity_starts = np.maximum(cube_starts, activity_start)
             activity_ends = np.minimum(cube_ends, activity_end)
             for cube_i in range(cube_starts.shape[0]):
@@ -79,7 +79,7 @@ class Reference(object):
 
     def _get_box(self, activity, video_name, start, end):
         boxes = []
-        for frame_id in range(start, end):
+        for frame_id in range(start + 1, end + 1):
             frame_id = str(frame_id)
             for obj in activity['objects']:
                 obj = obj['localization'][video_name]

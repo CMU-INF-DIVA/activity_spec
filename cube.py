@@ -60,6 +60,7 @@ class CubeActivities(object):
         '''
         Official format in Json structure, 
         only contains temporal and type information.
+        Note: the frame id in the official format starts from 1.
         '''
         activities = []
         for cube in self.cubes:
@@ -73,7 +74,7 @@ class CubeActivities(object):
                 object_type = 'Any'
             obj_id = int(round(obj_id))
             score = cube[self.columns.score].item()
-            t0, t1 = cube[[self.columns.t0, self.columns.t1]].type(
+            t0, t1 = (cube[[self.columns.t0, self.columns.t1]] + 1).type(
                 torch.int).tolist()
             x0, y0 = cube[[self.columns.x0, self.columns.y0]].type(
                 torch.int).tolist()
