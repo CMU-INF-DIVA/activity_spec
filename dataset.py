@@ -178,6 +178,7 @@ class ProposalDataset(Dataset):
                 sample = random.choice(self.negative_samples)
         t0, t1, x0, y0, x1, y1 = sample.proposal[
             CubeColumns.t0:CubeColumns.y1 + 1].tolist()
+        t1 = int(np.ceil(t1 / self.frame_stride)) * self.frame_stride # pad t1
         frames = self.load_frames_cache(sample.video_name, int(t0), int(t1))
         clip_ = frames[:, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))]
         clip = clip_.cpu()
