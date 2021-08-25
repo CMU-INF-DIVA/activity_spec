@@ -1,3 +1,5 @@
+import os
+import os.path as osp
 from enum import IntEnum, auto
 
 
@@ -101,12 +103,28 @@ class ActivityTypeVIRAT(IntEnum):
     vehicle_makes_u_turn = auto()
 
 
-ActivityTypes = {'MEVA': ActivityTypeMEVA, 'VIRAT': ActivityTypeVIRAT}
-
-
 def get_camera_id(video_name, dataset):
     if dataset == 'MEVA':
         return '.'.join(video_name.split('.')[-3:-1])
     elif dataset == 'VIRAT':
         return video_name[8:14]
     raise NotImplementedError(dataset)
+
+
+ActivityTypes = {'MEVA': ActivityTypeMEVA, 'VIRAT': ActivityTypeVIRAT}
+
+
+def load_activity_index(dataset):
+    activity_index_dir = osp.join(
+        os.environ['datasets_dir'], dataset, 'meta/activity-index/single')
+    name = 'ActivityType' + dataset
+    types = ['Negative'] + [
+        osp.splitext(a)[0] for a in os.listdir(activity_index_dir)]
+    enum = IntEnum(name, types, start=0)
+    globals()[name] = enum
+    return enum
+
+
+dataset = os.environ.get('dataset', None)
+if dataset is not None and dataset not in ActivityTypes:
+    ActivityTypes[dataset] = load_activity_index(dataset)
