@@ -54,7 +54,7 @@ class ProposalDataset(Dataset):
     def __init__(self, file_index_path, proposal_dir, label_dir, video_dir,
                  clips_dir=None, dataset='MEVA', *, eval_mode=False,
                  negative_fraction=None, negative_whitelist=None,
-                 spatial_enlarge_rate=None, frame_stride=1, 
+                 spatial_enlarge_rate=None, frame_stride=1, clip_duration=None,
                  clip_transform=None, label_transform=None, device=None):
         assert label_dir is not None or eval_mode
         self.video_dataset = VideoDataset(
@@ -67,6 +67,7 @@ class ProposalDataset(Dataset):
         self.negative_whitelist = negative_whitelist
         self.spatial_enlarge_rate = spatial_enlarge_rate
         self.frame_stride = frame_stride
+        self.clip_duration = clip_duration
         self.clip_transform = clip_transform
         self.label_transform = label_transform
         self.load_samples()
@@ -178,7 +179,8 @@ class ProposalDataset(Dataset):
                 sample = random.choice(self.negative_samples)
         t0, t1, x0, y0, x1, y1 = sample.proposal[
             CubeColumns.t0:CubeColumns.y1 + 1].tolist()
-        t1 = int(np.ceil(t1 / self.frame_stride)) * self.frame_stride # pad t1
+        if self.clip_duration is not None:
+            t1 = max(t1, t0 + self.clip_duration) # pad t1
         frames = self.load_frames_cache(sample.video_name, int(t0), int(t1))
         clip_ = frames[:, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))]
         clip = clip_.cpu()
