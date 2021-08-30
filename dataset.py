@@ -37,7 +37,7 @@ class VideoDataset(Dataset):
                 video_name, self.label_dir, None, self.activity_types)
         else:
             labels = CubeActivities(
-                torch.full((len(proposals), len(self.activity_types)), -1.), 
+                torch.full((len(proposals), len(self.activity_types)), -1.),
                 video_name, None, self.activity_types)
         return video_name, video_meta, proposals, labels
 
@@ -139,7 +139,8 @@ class ProposalDataset(Dataset):
                 frame_stride //= 2
             else:
                 warnings.warn(
-                    'Clip not found in clips_dir: %s' % (self.clips_dir))
+                    f'Clip({video_name}, {t0}-{t1}) not found in '
+                    f'clips_dir: {self.clips_dir}')
         if self.dataset == 'MEVA':
             video = AVIReader(video_name, self.video_dir)
             frames = []
@@ -180,7 +181,7 @@ class ProposalDataset(Dataset):
         t0, t1, x0, y0, x1, y1 = sample.proposal[
             CubeColumns.t0:CubeColumns.y1 + 1].tolist()
         if self.clip_duration is not None:
-            t1 = max(t1, t0 + self.clip_duration) # pad t1
+            t1 = max(t1, t0 + self.clip_duration)  # pad t1
         frames = self.load_frames_cache(sample.video_name, int(t0), int(t1))
         clip_ = frames[:, int(y0):int(np.ceil(y1)), int(x0):int(np.ceil(x1))]
         clip = clip_.cpu()
