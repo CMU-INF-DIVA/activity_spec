@@ -43,7 +43,10 @@ class Reference(object):
                 self.type_names, CubeColumns)
         quantized_activities = []
         for act_id, activity in enumerate(raw_activities):
-            activity_type = self.type_names[activity['activity']]
+            try:
+                activity_type = self.type_names[activity['activity']]
+            except:
+                continue
             start_end = {v: int(k) for k, v in activity['localization'][
                 video_name].items()}
             activity_start, activity_end = start_end[1], start_end[0]
