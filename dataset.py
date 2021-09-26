@@ -75,15 +75,26 @@ class ProposalDataset(Dataset):
         self.cache = (None, None)
 
     def load_samples(self):
+        half_duration = self.clip_duration // 2
         self.proposals = []
         self.all_samples = []
         self.positive_samples = []
         self.negative_samples = []
-        for video_name, _, proposals, labels in self.video_dataset:
+        for video_name, video_meta, proposals, labels in self.video_dataset:
             self.proposals.append(proposals)
+            num_frames = {
+                v: int(k) for k, v in video_meta['selected'].items()}[0] - 1
             if self.spatial_enlarge_rate is not None:
                 proposals = proposals.spatial_enlarge(
                     self.spatial_enlarge_rate)
+            proposals.cubes[:, proposals.columns.t0] = torch.clamp(
+                proposals.cubes[:, proposals.columns.t0] - half_duration, min=0)
+            proposals.cubes[:, proposals.columns.t1] = proposals.cubes[
+                :, proposals.columns.t0] + self.clip_duration
+            proposals.cubes[:, proposals.columns.t1] = torch.clamp(
+                proposals.cubes[:, proposals.columns.t1], max=num_frames)
+            proposals.cubes[:, proposals.columns.t0] = proposals.cubes[
+                :, proposals.columns.t1] - self.clip_duration
             columns = [proposals.columns[c.name] for c in CubeColumns]
             for i, (proposal, label) in enumerate(
                     zip(proposals.cubes[:, columns], labels.cubes)):
