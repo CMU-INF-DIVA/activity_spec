@@ -6,10 +6,11 @@ from collections import namedtuple
 
 import decord
 import numpy as np
+import psutil
 import torch
 from avi_r import AVIReader
 from decord import VideoReader, cpu, gpu
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 from .base import ActivityTypes, ProposalType
 from .cube import CubeActivities, CubeColumns
@@ -70,16 +71,20 @@ class ProposalDataset(Dataset):
         self.clip_duration = clip_duration
         self.clip_transform = clip_transform
         self.label_transform = label_transform
-        self.load_samples()
+        num_workers = 2 * len(psutil.Process().cpu_affinity())
+        self.load_samples(num_workers)
         self.device = device
         self.cache = (None, None)
 
-    def load_samples(self):
+    def load_samples(self, num_workers):
         self.proposals = []
         self.all_samples = []
         self.positive_samples = []
         self.negative_samples = []
-        for video_name, _, proposals, labels in self.video_dataset:
+        video_dataloader = DataLoader(
+            self.video_dataset, num_workers=num_workers,
+            collate_fn=lambda b: b[0])
+        for video_name, _, proposals, labels in video_dataloader:
             self.proposals.append(proposals)
             if self.spatial_enlarge_rate is not None:
                 proposals = proposals.spatial_enlarge(
