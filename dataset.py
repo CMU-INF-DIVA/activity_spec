@@ -81,10 +81,14 @@ class ProposalDataset(Dataset):
         self.all_samples = []
         self.positive_samples = []
         self.negative_samples = []
+        self.num_frames = 0
         video_dataloader = DataLoader(
             self.video_dataset, num_workers=num_workers,
             collate_fn=lambda b: b[0])
-        for video_name, _, proposals, labels in video_dataloader:
+        for video_name, video_meta, proposals, labels in video_dataloader:
+            start_end = {
+                v: int(k) - 1 for k, v in video_meta['selected'].items()}
+            self.num_frames += start_end[0] - start_end[1]
             self.proposals.append(proposals)
             if self.spatial_enlarge_rate is not None:
                 proposals = proposals.spatial_enlarge(
