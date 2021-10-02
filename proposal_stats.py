@@ -57,7 +57,7 @@ def parse_args(argv=None):
     parser.add_argument(
         'proposal_evaluation_dir',
         help='Directory containing proposal evaluation results')
-    parser.add_argument('subset_type', choices=['train', 'test', 'all'])
+    parser.add_argument('subset_type')
     parser.add_argument(
         '--target', default='SDL', choices=METRIC_KEYS.keys(),
         help='Evaluation target, only affects the metrics to be printed')

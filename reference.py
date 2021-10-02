@@ -18,7 +18,49 @@ class Reference(object):
         with gzip.open(reference_path, 'rt', encoding='utf-8') as f:
             reference = json.load(f)
         self.video_list = reference['filesProcessed']
-        self.activities = self._split_by_video(reference['activities'])
+        activities = self._interpolate_boxes(reference['activities'])
+        self.activities = self._split_by_video(activities)
+
+    def _interpolate_boxes(self, activities):
+        for activity in activities:
+            video_name = [*activity['localization'].keys()][0]
+            start_end = {v: int(k) for k, v in
+                         activity['localization'][video_name].items()}
+            start, end = start_end[1], start_end[0]
+            for obj in activity['objects']:
+                boxes = obj['localization'][video_name]
+                if len(boxes) > end - start:
+                    continue
+                frame_ids = sorted([int(f) for f in boxes.keys()])
+                for idx in range(1, len(frame_ids)):
+                    length = frame_ids[idx] - frame_ids[idx - 1]
+                    if length == 1:
+                        continue
+                    prev_box = boxes[str(frame_ids[idx - 1])]['boundingBox']
+                    next_box = boxes[str(frame_ids[idx])].get(
+                        'boundingBox', prev_box)
+                    middle_boxes = self._interpolate_box(
+                        prev_box, next_box, length)
+                    for box_i, frame_id in enumerate(range(
+                            frame_ids[idx - 1] + 1, frame_ids[idx])):
+                        box = middle_boxes[box_i]
+                        box[2:] -= box[:2]
+                        box = {
+                            'x': box[0], 'y': box[1], 'w': box[2], 'h': box[3]}
+                        boxes[str(frame_id)] = {'boundingBox': box}
+        return activities
+
+    def _interpolate_box(self, prev_box, next_box, length):
+        prev_box = np.array(
+            [prev_box['x'], prev_box['y'], prev_box['w'], prev_box['h']])
+        prev_box[2:] += prev_box[:2]
+        next_box = np.array(
+            [next_box['x'], next_box['y'], next_box['w'], next_box['h']])
+        next_box[2:] += next_box[:2]
+        ratios = np.linspace(0, 1, length + 2)
+        delta = next_box - prev_box
+        boxes = prev_box[None] + delta[None] * ratios[:, None]
+        return boxes[1:-1]
 
     def _split_by_video(self, activities):
         activities_by_video = {v: [] for v in self.video_list}

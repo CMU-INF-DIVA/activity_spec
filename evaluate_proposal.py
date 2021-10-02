@@ -84,6 +84,8 @@ def main(args, assigner=None):
         dataset_dir, 'meta/reference/%s.json.gz' % (args.subset))
     logger.info('Loading reference: %s', reference_path)
     reference = Reference(reference_path, ActivityTypes[args.dataset])
+    if sum([len(v) for v in reference.activities.values()]) == 0:
+        return
     os.makedirs(args.evaluation_dir, exist_ok=True)
     logger.info('Loading proposals: %s', args.proposal_dir)
     logger.info('Loading labels: %s', args.label_dir)
