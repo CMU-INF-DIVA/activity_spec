@@ -184,7 +184,7 @@ def parse_args(argv=None):
         '--target', default='SDL', choices=METRIC_KEYS.keys(),
         help='Evaluation target, only affects the metrics to be printed')
     parser.add_argument(
-        '--tfa_threshold', type=float, default=0.3,
+        '--tfa_threshold', type=float, default=0.4,
         help='Time-based false alarm threshold to filter redundant instances')
     parser.add_argument('--silent', action='store_true', help='Silent logs')
     parser.add_argument(
