@@ -21,7 +21,7 @@ Job = namedtuple('Job', [
     'activity_type', 'evaluation_dir', 'protocol',
     'file_index_path', 'activity_index_dir',
     'file_list', 'reference_activities', 'prediction_activities',
-    'max_activity_length'])
+    'max_false_activity_length'])
 METRIC_KEYS = {
     'SDL': ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'p_miss@0.02tfa'],
     'TRECVID': ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']}
@@ -43,18 +43,19 @@ def worker_initializer():
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 
-def get_prediction(job):
+def get_prediction(job, reference_length):
     selected_activities = []
     sorted_activities = sorted(
         job.prediction_activities, key=lambda a: a['presenceConf'],
         reverse=True)
+    max_activity_length = reference_length + job.max_false_activity_length
     current_length = 0
     for act in sorted_activities:
         frame_id_1, frame_id_2 = [*[*act['localization'].values()][0].keys()]
         length = abs(int(frame_id_1) - int(frame_id_2))
         current_length += length
         selected_activities.append(act)
-        if current_length > job.max_activity_length:
+        if current_length > max_activity_length:
             break
     status = {'status': 'success', 'message': ''}
     prediction = {
@@ -73,10 +74,14 @@ def activity_worker(job):
         job.activity_index_dir, '%s.json' % (job.activity_type))
     reference = {'filesProcessed': job.file_list,
                  'activities': job.reference_activities}
+    reference_length = 0
+    for act in job.reference_activities:
+        loc = {v: int(k) for k, v in [*act['localization'].values()][0].items()}
+        reference_length += loc[0] - loc[1]
     reference_path = osp.join(evaluation_dir, 'reference.json')
     with open(reference_path, 'w') as f:
         json.dump(reference, f, indent=4)
-    prediction = get_prediction(job)
+    prediction = get_prediction(job, reference_length)
     prediction_path = osp.join(evaluation_dir, 'prediction.json')
     with open(prediction_path, 'w') as f:
         json.dump(prediction, f, indent=4)
@@ -121,29 +126,10 @@ def main(args):
     for attributes in file_index.values():
         length = {v: int(k) for k, v in attributes['selected'].items()}[0] - 1
         video_length += length
-    max_activity_length = video_length * args.tfa_threshold
     logger.info('Video length: %d frames', video_length)
-    logger.info('Per-type activity length %d frames at TFA threshold %.2f',
-                max_activity_length, args.tfa_threshold)
     logger.info('Loading prediction: %s', args.prediction_file)
     with open(args.prediction_file) as f:
         prediction = json.load(f)
-    total_prediction_length = 0
-    for act in prediction['activities']:
-        frame_id_1, frame_id_2 = [*[*act['localization'].values()][0].keys()]
-        length = abs(int(frame_id_1) - int(frame_id_2))
-        total_prediction_length += length
-    prediction_types = len(set([act['activity']
-                                for act in prediction['activities']]))
-    if prediction_types > 0:
-        average_prediction_length = total_prediction_length // prediction_types
-    else:
-        average_prediction_length = 0
-    prediction_tfa = average_prediction_length / video_length
-    logger.info('Prediction length: %d frames of %d types',
-                total_prediction_length, prediction_types)
-    logger.info('Per-type average activity length %d frames with TFA %.2f',
-                average_prediction_length, prediction_tfa)
     logger.info('Loading reference: %s', reference_path)
     with gzip.open(reference_path, 'rt', encoding='utf-8') as f:
         reference = json.load(f)
@@ -153,6 +139,8 @@ def main(args):
     logger.info('Grouping activities by type')
     reference_by_type = group_activities_by_type(reference['activities'])
     prediction_by_type = group_activities_by_type(prediction['activities'])
+    logger.info('Pruning prediction at TFA threshold %.2f', args.tfa_threshold)
+    max_false_activity_length = video_length * args.tfa_threshold
     logger.info('Evaluating')
     jobs = []
     with tempfile.TemporaryDirectory() as evaluation_dir:
@@ -164,7 +152,7 @@ def main(args):
                 file_index_path, activity_index_dir, file_list,
                 reference_by_type[activity_type],
                 prediction_by_type[activity_type],
-                max_activity_length)
+                max_false_activity_length)
             jobs.append(job)
         metrics = [*process_map(
             activity_worker, jobs, args.num_processes, 
@@ -196,7 +184,7 @@ def parse_args(argv=None):
         '--target', default='SDL', choices=METRIC_KEYS.keys(),
         help='Evaluation target, only affects the metrics to be printed')
     parser.add_argument(
-        '--tfa_threshold', type=float, default=0.4,
+        '--tfa_threshold', type=float, default=0.3,
         help='Time-based false alarm threshold to filter redundant instances')
     parser.add_argument('--silent', action='store_true', help='Silent logs')
     parser.add_argument(
