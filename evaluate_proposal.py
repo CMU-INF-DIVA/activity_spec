@@ -135,14 +135,16 @@ def main(args, assigner=None):
         json.dump(stats, f, indent=4)
     logger.info('Statistics: \n%s', json.dumps(stats, indent=4))
     logger.info('Evaluating')
-    num_processes = len(psutil.Process().cpu_affinity()) // args.num_processes
+    num_workers = min(args.num_processes, len(MODES) * len(THRESHOLDS))
+    job_num_processes = max(
+        1, len(psutil.Process().cpu_affinity()) // num_workers)
     jobs = []
     for threshold in THRESHOLDS:
         for mode in MODES:
             job = Job(labeled_prop, mode, threshold, args.subset, args.target,
-                      dataset_dir, args.evaluation_dir, num_processes)
+                      dataset_dir, args.evaluation_dir, job_num_processes)
             jobs.append(job)
-    with ProcessPoolExecutor(args.num_processes) as pool:
+    with ProcessPoolExecutor(num_workers) as pool:
         metrics = [*progressbar(
             pool.map(threshold_worker, reversed(jobs)),
             'Jobs', total=len(jobs))]
@@ -194,8 +196,7 @@ def parse_args(argv=None):
         default=osp.join(osp.dirname(__file__), '../../datasets'))
     parser.add_argument(
         '--num_processes', type=int,
-        default=min(len(psutil.Process().cpu_affinity()),
-                    len(MODES) * len(THRESHOLDS)),
+        default=len(psutil.Process().cpu_affinity()),
         help='Number of processes')
     args = parser.parse_args(argv)
     return args

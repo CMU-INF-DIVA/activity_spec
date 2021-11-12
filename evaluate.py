@@ -21,7 +21,7 @@ Job = namedtuple('Job', [
     'activity_type', 'evaluation_dir', 'protocol',
     'file_index_path', 'activity_index_dir',
     'file_list', 'reference_activities', 'prediction_activities',
-    'max_false_activity_length'])
+    'max_false_activity_length', 'scorer_num_processes'])
 METRIC_KEYS = {
     'SDL': ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'p_miss@0.02tfa'],
     'TRECVID': ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']}
@@ -76,7 +76,8 @@ def activity_worker(job):
                  'activities': job.reference_activities}
     reference_length = 0
     for act in job.reference_activities:
-        loc = {v: int(k) for k, v in [*act['localization'].values()][0].items()}
+        loc = {v: int(k)
+               for k, v in [*act['localization'].values()][0].items()}
         reference_length += loc[0] - loc[1]
     reference_path = osp.join(evaluation_dir, 'reference.json')
     with open(reference_path, 'w') as f:
@@ -88,7 +89,7 @@ def activity_worker(job):
     cmd = f'{sys.executable} {SCORER} {job.protocol} ' \
         f'-a {activity_index_path} -f {job.file_index_path} ' \
         f'-r {reference_path} -s {prediction_path} -o {evaluation_dir} ' \
-        f'--det-point-resolution 1024 -v'
+        f'--det-point-resolution 1024 -v -n {job.scorer_num_processes}'
     columns = [job.activity_type]
     del reference, prediction, job
     try:
@@ -142,6 +143,8 @@ def main(args):
     logger.info('Pruning prediction at TFA threshold %.2f', args.tfa_threshold)
     max_false_activity_length = video_length * args.tfa_threshold
     logger.info('Evaluating')
+    num_workers = min(args.num_processes, len(reference_by_type))
+    scorer_num_processes = max(1, args.num_processes // num_workers)
     jobs = []
     with tempfile.TemporaryDirectory() as evaluation_dir:
         if args.save_all:
@@ -152,10 +155,10 @@ def main(args):
                 file_index_path, activity_index_dir, file_list,
                 reference_by_type[activity_type],
                 prediction_by_type[activity_type],
-                max_false_activity_length)
+                max_false_activity_length, scorer_num_processes)
             jobs.append(job)
         metrics = [*process_map(
-            activity_worker, jobs, args.num_processes, 
+            activity_worker, jobs, num_workers,
             desc='Evaluation by type', silent=args.silent)]
     metrics = sorted(metrics, key=lambda x: x.columns[0])
     metrics = pd.concat(metrics, axis=1)
