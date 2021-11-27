@@ -125,8 +125,8 @@ def main(args):
     os.makedirs(args.evaluation_dir, exist_ok=True)
     file_index_path = osp.join(
         args.dataset_dir, 'meta/file-index/%s.json' % (args.subset))
-    activity_index_dir = osp.join(
-        args.dataset_dir, 'meta/activity-index/single')
+    activity_index_dir = osp.join(args.dataset_dir, 'meta/activity-index')
+    single_activity_index_dir = osp.join(activity_index_dir, 'single')
     reference_path = osp.join(
         args.dataset_dir, 'meta/reference/%s.json.gz' % (args.subset))
     logger.info('Loading file index: %s', file_index_path)
@@ -156,17 +156,24 @@ def main(args):
         max_false_activity_length = video_length * args.tfa_threshold
     else:
         max_false_activity_length = None
+    activity_types = [*reference_by_type.keys()]
+    if args.activity_index_name is not None:
+        logger.info('Using activity index %s', args.activity_index_name)
+        with open(osp.join(activity_index_dir,
+                           f'{args.activity_index_name}.json')) as f:
+            activity_types_new = [*json.load(f).keys()]
+        activity_types = list(set(activity_types) & set(activity_types_new))
     logger.info('Evaluating')
-    num_workers = min(args.num_processes, len(reference_by_type))
+    num_workers = min(args.num_processes, len(activity_types))
     scorer_num_processes = max(1, args.num_processes // num_workers)
     jobs = []
     with tempfile.TemporaryDirectory() as evaluation_dir:
         if args.save_all:
             evaluation_dir = args.evaluation_dir
-        for activity_type in reference_by_type.keys():
+        for activity_type in activity_types:
             job = Job(
                 activity_type, evaluation_dir, protocol,
-                file_index_path, activity_index_dir, file_list,
+                file_index_path, single_activity_index_dir, file_list,
                 reference_by_type[activity_type],
                 prediction_by_type[activity_type],
                 max_false_activity_length, scorer_num_processes)
@@ -195,8 +202,11 @@ def parse_args(argv=None):
     parser.add_argument(
         'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
-        '--target', default='SRL', choices=METRIC_KEYS.keys(),
+        '--target', default='SDL', choices=METRIC_KEYS.keys(),
         help='Evaluation target, only affects the metrics to be printed')
+    parser.add_argument(
+        '--activity_index_name',
+        help='Activity index name to select a subset of activity types')
     parser.add_argument(
         '--tfa_threshold', type=float, default=0.4,
         help='Time-based false alarm threshold to filter redundant instances')
