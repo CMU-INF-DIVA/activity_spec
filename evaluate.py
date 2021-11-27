@@ -23,8 +23,13 @@ Job = namedtuple('Job', [
     'file_list', 'reference_activities', 'prediction_activities',
     'max_false_activity_length', 'scorer_num_processes'])
 METRIC_KEYS = {
-    'SDL': ['nAUDC@0.2tfa', 'p_miss@0.04tfa', 'p_miss@0.02tfa'],
-    'TRECVID': ['nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']}
+    'SDL': ('ActEV_SDL_V2', [
+        'nAUDC@0.2tfa', 'p_miss@0.04tfa', 'p_miss@0.02tfa']),
+    'TRECVID': ('ActEV_SDL_V2', [
+        'nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']),
+    'SRL': ('SRL_AD_V1', [
+        'nAUDC@0.1rfa', 'p_miss@0.1rfa']),
+}
 
 logger = get_logger(NAME.split('.')[-1])
 
@@ -44,19 +49,23 @@ def worker_initializer():
 
 
 def get_prediction(job, reference_length):
-    selected_activities = []
     sorted_activities = sorted(
         job.prediction_activities, key=lambda a: a['presenceConf'],
         reverse=True)
-    max_activity_length = reference_length + job.max_false_activity_length
-    current_length = 0
-    for act in sorted_activities:
-        frame_id_1, frame_id_2 = [*[*act['localization'].values()][0].keys()]
-        length = abs(int(frame_id_1) - int(frame_id_2))
-        current_length += length
-        selected_activities.append(act)
-        if current_length > max_activity_length:
-            break
+    if job.max_false_activity_length is not None:
+        selected_activities = []
+        max_activity_length = reference_length + job.max_false_activity_length
+        current_length = 0
+        for act in sorted_activities:
+            frame_id_1, frame_id_2 = [
+                *[*act['localization'].values()][0].keys()]
+            length = abs(int(frame_id_1) - int(frame_id_2))
+            current_length += length
+            selected_activities.append(act)
+            if current_length > max_activity_length:
+                break
+    else:
+        selected_activities = sorted_activities
     status = {'status': 'success', 'message': ''}
     prediction = {
         'filesProcessed': job.file_list,
@@ -140,8 +149,13 @@ def main(args):
     logger.info('Grouping activities by type')
     reference_by_type = group_activities_by_type(reference['activities'])
     prediction_by_type = group_activities_by_type(prediction['activities'])
-    logger.info('Pruning prediction at TFA threshold %.2f', args.tfa_threshold)
-    max_false_activity_length = video_length * args.tfa_threshold
+    protocol, metric_keys = METRIC_KEYS[args.target]
+    if protocol == 'ActEV_SDL_V2':
+        logger.info('Pruning prediction at TFA threshold %.2f',
+                    args.tfa_threshold)
+        max_false_activity_length = video_length * args.tfa_threshold
+    else:
+        max_false_activity_length = None
     logger.info('Evaluating')
     num_workers = min(args.num_processes, len(reference_by_type))
     scorer_num_processes = max(1, args.num_processes // num_workers)
@@ -151,7 +165,7 @@ def main(args):
             evaluation_dir = args.evaluation_dir
         for activity_type in reference_by_type.keys():
             job = Job(
-                activity_type, evaluation_dir, args.protocol,
+                activity_type, evaluation_dir, protocol,
                 file_index_path, activity_index_dir, file_list,
                 reference_by_type[activity_type],
                 prediction_by_type[activity_type],
@@ -167,8 +181,7 @@ def main(args):
     metrics_mean.columns = ['mean']
     metrics_mean.to_csv(osp.join(args.evaluation_dir, 'metrics.csv'))
     logger.info('Metrics: \n\t%s', '\n\t'.join(['%s = %.4f' % (
-        key, metrics_mean.loc[key, 'mean'])
-        for key in METRIC_KEYS[args.target]]))
+        key, metrics_mean.loc[key, 'mean']) for key in metric_keys]))
     return metrics_mean
 
 
@@ -182,9 +195,7 @@ def parse_args(argv=None):
     parser.add_argument(
         'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
-        '--protocol', default='ActEV_SDL_V2', help='Scorer protocol')
-    parser.add_argument(
-        '--target', default='SDL', choices=METRIC_KEYS.keys(),
+        '--target', default='SRL', choices=METRIC_KEYS.keys(),
         help='Evaluation target, only affects the metrics to be printed')
     parser.add_argument(
         '--tfa_threshold', type=float, default=0.4,
