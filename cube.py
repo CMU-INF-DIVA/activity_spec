@@ -1,6 +1,6 @@
 import os.path as osp
 from enum import EnumMeta, IntEnum, auto
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,13 +31,15 @@ class CubeActivities(object):
     '''
 
     def __init__(self, cubes: torch.Tensor, video_name: str,
-                 type_names: Union[None, EnumMeta], columns: EnumMeta):
+                 type_names: Optional[EnumMeta], columns: EnumMeta, *,
+                 sub_cubes: Optional[List[torch.Tensor]] = None):
         assert cubes.ndim == 2 and cubes.shape[1] == len(columns), \
             'Cube activity format invalid'
         self.cubes = cubes
         self.video_name = video_name
         self.type_names = type_names
         self.columns = columns
+        self.sub_cubes = sub_cubes
 
     def __len__(self):
         return self.cubes.shape[0]
@@ -56,14 +58,29 @@ class CubeActivities(object):
             df['type'] = df['type'].apply(lambda v: self.type_names(v).name)
         return df
 
+    def _get_official_boxes(self, cubes):
+        int_cubes = torch.cat([
+            cubes[:, [self.columns.t0]].type(torch.int) + 1,
+            cubes[:, [self.columns.x0, self.columns.y0]].type(
+                torch.int),
+            cubes[:, [self.columns.x1, self.columns.y1]].ceil().type(
+                torch.int)],
+            axis=1)
+        boxes = {}
+        for cube in int_cubes:
+            t0, x0, y0, x1, y1 = cube.tolist()
+            boxes[str(t0)] = {'boundingBox': {
+                'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0}}
+        return boxes
+
     def to_official(self, object_types=None):
         '''
-        Official format in Json structure, 
+        Official format in Json structure,
         only contains temporal and type information.
         Note: the frame id in the official format starts from 1.
         '''
         activities = []
-        for cube in self.cubes:
+        for cube_i, cube in enumerate(self.cubes):
             obj_id = cube[self.columns.id].item()
             activity_type = self.type_names(
                 int(round(cube[self.columns.type].item()))).name
@@ -76,19 +93,17 @@ class CubeActivities(object):
             score = cube[self.columns.score].item()
             t0, t1 = (cube[[self.columns.t0, self.columns.t1]] + 1).type(
                 torch.int).tolist()
-            x0, y0 = cube[[self.columns.x0, self.columns.y0]].type(
-                torch.int).tolist()
-            x1, y1 = cube[[self.columns.x1, self.columns.y1]].ceil().type(
-                torch.int).tolist()
-            bbox = {'boundingBox': {
-                'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0}}
+            if self.sub_cubes is not None:
+                boxes = self._get_official_boxes(self.sub_cubes[cube_i])
+            else:
+                boxes = self._get_official_boxes(cube[None])
+            boxes[str(t1)] = {}
             activity = {
                 'activity': activity_type, 'presenceConf': score,
                 'localization': {self.video_name: {str(t0): 1, str(t1): 0}},
                 'objects': [
                     {'objectType': object_type, 'objectID': obj_id,
-                     'localization': {
-                         self.video_name: {str(t0): bbox, str(t1): {}}}}]}
+                     'localization': {self.video_name: boxes}}]}
             activities.append(activity)
         return activities
 
@@ -96,6 +111,7 @@ class CubeActivities(object):
         '''
         Save as csv file in save_dir.
         '''
+        # TODO: save sub_cubes if present
         df = self.to_internal()
         filename = self._get_internal_filename(
             self.video_name, suffix, save_dir)
@@ -103,8 +119,8 @@ class CubeActivities(object):
 
     @classmethod
     def load(cls, video_name: str, load_dir: str,
-             type_names: Union[None, EnumMeta],
-             columns: Union[None, EnumMeta] = None,
+             type_names: Optional[EnumMeta],
+             columns: Optional[EnumMeta] = None,
              suffix: str = ''):
         '''
         Load from csv file in load_dir.
@@ -121,7 +137,7 @@ class CubeActivities(object):
         return obj
 
     def spatial_enlarge(self, enlarge_rate: float,
-                        spatial_limit: Union[None, Tuple] = None):
+                        spatial_limit: Optional[Tuple] = None):
         '''
         Enlarge spatial boxes.
         enlarge_rate: enlarge rate in each axis.
@@ -142,11 +158,12 @@ class CubeActivities(object):
                 torch.as_tensor([spatial_limit], dtype=torch.float))
         return self.duplicate_with(new_cubes)
 
-    def duplicate_with(self, cubes: Union[None, torch.Tensor] = None, *,
-                       selection: Union[None, torch.Tensor] = None,
-                       video_name: Union[None, str] = None,
-                       type_names: Union[None, EnumMeta] = None,
-                       columns: EnumMeta = None):
+    def duplicate_with(self, cubes: Optional[torch.Tensor] = None, *,
+                       selection: Optional[torch.Tensor] = None,
+                       video_name: Optional[str] = None,
+                       type_names: Optional[EnumMeta] = None,
+                       columns: EnumMeta = None,
+                       sub_cubes: Optional[List[torch.Tensor]] = None):
         '''
         Create a new instance with the same attributes unless specified.
         Cubes can be selected via the selection argument.
@@ -157,7 +174,9 @@ class CubeActivities(object):
         video_name = video_name or self.video_name
         type_names = type_names or self.type_names
         columns = columns or self.columns
-        return type(self)(cubes, video_name, type_names, columns)
+        sub_cubes = sub_cubes or self.sub_cubes
+        return type(self)(cubes, video_name, type_names, columns,
+                          sub_cubes=sub_cubes)
 
     def merge_with(self, cube_acts_list: List, **kwargs):
         cubes = torch.cat([self.cubes] + [c.cubes for c in cube_acts_list])
