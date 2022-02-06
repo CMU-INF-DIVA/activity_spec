@@ -36,7 +36,7 @@ def main(args):
            '%(#label <= 3)': stats['label_rates']['1'] +
            stats['label_rates']['2'] + stats['label_rates']['3']}
     stats_df = pd.DataFrame([row], index=[args.subset_type])
-    metrics_df = df.loc[METRIC_KEYS[args.target]]
+    metrics_df = df.loc[METRIC_KEYS[args.target][1]]
     sub_dfs = []
     for mode in ['IoU', 'RefCover']:
         columns = ['%s_avg' % (mode)] + [
