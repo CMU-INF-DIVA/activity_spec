@@ -150,7 +150,7 @@ def main(args, assigner=None):
             'Jobs', total=len(jobs))]
     metrics = pd.concat(metrics, axis=1)
     pd.set_option('max_columns', None)
-    print_keys = METRIC_KEYS[args.target]
+    print_keys = METRIC_KEYS[args.target][1]
     all_columns = []
     for mode in MODES:
         columns = ['%s_%.1f' % (mode, thres) for thres in THRESHOLDS]
