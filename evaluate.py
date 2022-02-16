@@ -28,18 +28,21 @@ METRIC_KEYS = {
     'TRECVID': ('ActEV_SDL_V2', [
         'nAUDC@0.2tfa', 'p_miss@0.15tfa', 'w_p_miss@0.15rfa']),
     'SRL': ('SRL_AD_V1', [
-        'nAUDC@0.1rfa', 'p_miss@0.1rfa']),
+        'nAUDC@0.2rfa', 'p_miss@0.1rfa']),
+    'SRL_AOD': ('SRL_AOD_V1', [
+        'nAUDC@0.2rfa', 'p_miss@0.1rfa', 'n-mode@0.1rfa']),
 }
 
 logger = get_logger(NAME.split('.')[-1])
 
 
-def group_activities_by_type(activities):
+def group_activities_by_type(activities, keep_objects):
     activities_by_type = defaultdict(list)
     for activity in activities:
         activity_type = activity['activity']
-        activity = activity.copy()
-        activity.pop('objects', None)
+        if not keep_objects:
+            activity = activity.copy()
+            activity.pop('objects', None)
         activities_by_type[activity_type].append(activity)
     return activities_by_type
 
@@ -147,8 +150,11 @@ def main(args):
         prediction['filesProcessed']), 'File list does not match'
     file_list = reference['filesProcessed']
     logger.info('Grouping activities by type')
-    reference_by_type = group_activities_by_type(reference['activities'])
-    prediction_by_type = group_activities_by_type(prediction['activities'])
+    keep_objects = 'AOD' in args.target
+    reference_by_type = group_activities_by_type(
+        reference['activities'], keep_objects)
+    prediction_by_type = group_activities_by_type(
+        prediction['activities'], keep_objects)
     protocol, metric_keys = METRIC_KEYS[args.target]
     if protocol == 'ActEV_SDL_V2':
         logger.info('Pruning prediction at TFA threshold %.2f',
