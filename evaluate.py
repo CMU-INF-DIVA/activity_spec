@@ -111,7 +111,7 @@ def activity_worker(job):
         print('\n' + e.stdout.decode('utf-8'))
         raise e
     metrics = pd.read_csv(
-        osp.join(evaluation_dir, 'scores_by_activity.csv'), '|')
+        osp.join(evaluation_dir, 'scores_by_activity.csv'), sep='|')
     metrics = metrics[['metric_name', 'metric_value']]
     metrics = metrics.set_index('metric_name')
     metrics['metric_value'] = metrics['metric_value'].apply(

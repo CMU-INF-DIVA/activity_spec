@@ -10,7 +10,7 @@ import psutil
 import torch
 from avi_r import AVIReader
 from decord import VideoReader, cpu, gpu
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 from .base import ActivityTypes, ProposalType
 from .cube import CubeActivities, CubeColumns
@@ -71,21 +71,17 @@ class ProposalDataset(Dataset):
         self.clip_duration = clip_duration
         self.clip_transform = clip_transform
         self.label_transform = label_transform
-        num_workers = 2 * len(psutil.Process().cpu_affinity())
-        self.load_samples(num_workers)
+        self.load_samples()
         self.device = device
         self.cache = (None, None)
 
-    def load_samples(self, num_workers):
+    def load_samples(self):
         self.proposals = []
         self.all_samples = []
         self.positive_samples = []
         self.negative_samples = []
         self.num_frames = 0
-        video_dataloader = DataLoader(
-            self.video_dataset, num_workers=num_workers,
-            collate_fn=lambda b: b[0])
-        for video_name, video_meta, proposals, labels in video_dataloader:
+        for video_name, video_meta, proposals, labels in self.video_dataset:
             start_end = {
                 v: int(k) - 1 for k, v in video_meta['selected'].items()}
             self.num_frames += start_end[0] - start_end[1]
