@@ -175,6 +175,10 @@ class CubeActivities(object):
         type_names = type_names or self.type_names
         columns = columns or self.columns
         sub_cubes = sub_cubes or self.sub_cubes
+        if selection is not None and sub_cubes is not None:
+            mask = torch.zeros(len(sub_cubes), dtype=torch.bool)
+            mask[selection] = True
+            sub_cubes = [sub_cubes[i] for i in mask.nonzero(as_tuple=True)[0]]
         return type(self)(cubes, video_name, type_names, columns,
                           sub_cubes=sub_cubes)
 
