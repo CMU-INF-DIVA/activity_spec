@@ -25,8 +25,8 @@ MODES = ['IoU', 'RefCover']
 THRESHOLDS = np.arange(0, 1, 0.1)
 
 Job = namedtuple('Job', [
-    'reference', 'mode', 'threshold', 'subset', 'target', 'dataset_dir',
-    'evaluation_dir', 'num_processes'])
+    'output', 'mode', 'threshold', 'subset', 'target', 'dataset_dir',
+    'evaluation_dir', 'num_processes', 'activity_index_name'])
 
 
 logger = get_logger(NAME)
@@ -58,19 +58,21 @@ def get_spatial_scores(cube_acts_ref, cube_acts_prop):
 
 
 def threshold_worker(job):
-    reference = job.reference
-    reference['activities'] = [act for act in reference['activities']
-                               if act[job.mode] >= job.threshold]
+    output = job.output
+    output['activities'] = [act for act in output['activities']
+                            if act[job.mode] >= job.threshold]
     labeled_prop_path = osp.join(
         job.evaluation_dir, 'labeled_prop_%s_%.1f.json' % (
             job.mode, job.threshold))
     with open(labeled_prop_path, 'w') as f:
-        json.dump(reference, f, indent=4)
+        json.dump(output, f, indent=4)
     evaluation_dir = osp.join(
         job.evaluation_dir, 'eval_%s_%.1f' % (job.mode, job.threshold))
     argv = [job.dataset_dir, job.subset, labeled_prop_path,
             evaluation_dir, '--target', job.target, '--silent',
             '--num_processes', str(job.num_processes)]
+    if job.activity_index_name is not None:
+        argv.extend(['--activity_index_name', job.activity_index_name])
     current_metric = evaluate_main(evaluate_args(argv))
     current_metric.columns = ['%s_%.1f' % (job.mode, job.threshold)]
     return current_metric
@@ -138,11 +140,13 @@ def main(args, assigner=None):
     num_workers = min(args.num_processes, len(MODES) * len(THRESHOLDS))
     job_num_processes = max(
         1, len(psutil.Process().cpu_affinity()) // num_workers)
+    activity_index_name = 'srl_20' if args.target.startswith('SRL') else None
     jobs = []
     for threshold in THRESHOLDS:
         for mode in MODES:
             job = Job(labeled_prop, mode, threshold, args.subset, args.target,
-                      dataset_dir, args.evaluation_dir, job_num_processes)
+                      dataset_dir, args.evaluation_dir, job_num_processes,
+                      activity_index_name)
             jobs.append(job)
     with ProcessPoolExecutor(num_workers) as pool:
         metrics = [*progressbar(
