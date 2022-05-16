@@ -209,7 +209,7 @@ def parse_args(argv=None):
         'evaluation_dir', help='Directory of evaluation results')
     parser.add_argument(
         '--target', default='SDL', choices=METRIC_KEYS.keys(),
-        help='Evaluation target, only affects the metrics to be printed')
+        help='Evaluation target, for scoring protocol and printed metrics')
     parser.add_argument(
         '--activity_index_name',
         help='Activity index name to select a subset of activity types')
